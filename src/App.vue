@@ -1,7 +1,7 @@
 <script setup>
 import { onMounted, ref, watch } from "vue";
 import { useFinanceStore } from "@/store/finance";
-import Sidebar from "@/components/Sidebar.vue";
+import Sidebar from "@/components/sidebar.vue";
 import MobileHeader from "@/components/MobileHeader.vue";
 
 const financeStore = useFinanceStore();
