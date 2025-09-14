@@ -1,6 +1,5 @@
 
 
-````markdown
 # Mapan - Aplikasi Manajemen Keuangan Pribadi
 
 **Mapan** adalah aplikasi web modern yang dirancang untuk membantu Anda mengelola keuangan pribadi dengan lebih mudah dan efektif. Lacak pemasukan, pengeluaran, buat anggaran, dan capai target finansial Anda di satu tempat.
