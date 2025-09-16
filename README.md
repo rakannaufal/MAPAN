@@ -124,9 +124,5 @@ Kontribusi sangat kami harapkan\! Jika Anda ingin membantu, silakan fork reposit
 
 -----
 
-## 📄 Lisensi
-
-Proyek ini dilisensikan di bawah [MIT License](LICENSE.md).
-
 ```
 ```
