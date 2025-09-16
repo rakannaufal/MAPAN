@@ -26,6 +26,7 @@ Chart.register(
 
 const financeStore = useFinanceStore();
 
+// --- STATE LOKAL: Mengadopsi logika dari halaman Anggaran ---
 const viewMode = ref("monthly");
 const now = new Date();
 const currentMonth = ref(
@@ -39,6 +40,7 @@ const activePeriod = computed(() => {
     : String(currentYear.value);
 });
 
+// --- COMPUTED PROPERTIES: Logika pemrosesan data untuk Laporan ---
 const filteredData = computed(() => {
   const start = new Date(
     viewMode.value === "monthly"
@@ -57,7 +59,7 @@ const filteredData = computed(() => {
   end.setHours(23, 59, 59, 999);
 
   const transactions = financeStore.transactions.filter((tx) => {
-    const txDate = new Date(tx.date);
+    const txDate = new Date(tx.transaction_at); // <-- PERBAIKAN
     return txDate >= start && txDate <= end;
   });
 
@@ -255,7 +257,7 @@ watch(
         </div>
       </section>
       <section class="report-section">
-        <h3 class="section-title">Anggaran Perbulan</h3>
+        <h3 class="section-title">Perbandingan Anggaran</h3>
         <div v-if="processedReportBudgets.length > 0" class="budget-list">
           <div
             v-for="item in processedReportBudgets"
@@ -329,35 +331,40 @@ watch(
       </section>
       <section class="report-section">
         <h3 class="section-title">Rincian Transaksi</h3>
-        <table class="transaction-table">
-          <thead>
-            <tr>
-              <th>Tanggal</th>
-              <th>Kategori</th>
-              <th>Keterangan</th>
-              <th class="text-right">Jumlah</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-if="filteredData.transactions.length === 0">
-              <td colspan="4" class="no-data">
-                Tidak ada transaksi pada periode ini.
-              </td>
-            </tr>
-            <tr v-for="tx in filteredData.transactions" :key="tx.id">
-              <td>{{ new Date(tx.date).toLocaleDateString("id-ID") }}</td>
-              <td>{{ tx.category }}</td>
-              <td>{{ tx.notes }}</td>
-              <td
-                class="text-right"
-                :class="tx.type === 'Pemasukan' ? 'green' : 'red'"
-              >
-                {{ tx.type === "Pemasukan" ? "+" : "-" }}
-                {{ formatCurrency(tx.amount) }}
-              </td>
-            </tr>
-          </tbody>
-        </table>
+        <div class="table-wrapper">
+          <table class="transaction-table">
+            <thead>
+              <tr>
+                <th class="col-date">Tanggal</th>
+                <th class="col-category">Kategori</th>
+                <th class="col-notes">Keterangan</th>
+                <th class="col-amount text-right">Jumlah</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-if="filteredData.transactions.length === 0">
+                <td colspan="4" class="no-data">
+                  Tidak ada transaksi pada periode ini.
+                </td>
+              </tr>
+              <tr v-for="tx in filteredData.transactions" :key="tx.id">
+                <td>
+                  {{ new Date(tx.transaction_at).toLocaleDateString("id-ID") }}
+                </td>
+                <!-- <-- PERBAIKAN -->
+                <td>{{ tx.category }}</td>
+                <td class="notes-cell">{{ tx.notes }}</td>
+                <td
+                  class="text-right"
+                  :class="tx.type === 'Pemasukan' ? 'green' : 'red'"
+                >
+                  {{ tx.type === "Pemasukan" ? "+" : "-" }}
+                  {{ formatCurrency(tx.amount) }}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </section>
     </div>
   </div>
@@ -530,13 +537,17 @@ watch(
   font-size: 12px;
   font-weight: 600;
 }
+.table-wrapper {
+  overflow-x: auto;
+}
 .transaction-table {
   width: 100%;
   border-collapse: collapse;
+  min-width: 600px;
 }
 .transaction-table th,
 .transaction-table td {
-  padding: 10px;
+  padding: 10px 12px;
   text-align: left;
   border-bottom: 1px solid var(--border-color);
   font-size: 14px;
@@ -553,6 +564,23 @@ watch(
   text-align: center;
   color: var(--text-secondary);
   padding: 20px 0;
+}
+.col-date {
+  width: 20%;
+}
+.col-category {
+  width: 25%;
+}
+.col-notes {
+  width: 35%;
+}
+.col-amount {
+  width: 20%;
+  white-space: nowrap;
+}
+.notes-cell {
+  white-space: normal;
+  word-break: break-word;
 }
 .budget-list {
   display: flex;
@@ -608,18 +636,13 @@ watch(
   .report-section {
     page-break-inside: avoid;
   }
+  .table-wrapper {
+    overflow: visible;
+  }
 }
 @media (max-width: 768px) {
-  .dashboard-grid {
-    grid-template-columns: 1fr;
-  }
   .page-title {
     font-size: 24px;
-  }
-}
-@media (max-width: 1024px) {
-  .chart-grid {
-    grid-template-columns: 1fr;
   }
 }
 </style>

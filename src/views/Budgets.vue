@@ -3,7 +3,7 @@
     <div class="page-header">
       <h1 class="page-title">Anggaran</h1>
       <button class="button button-primary" @click="handleAddNew">
-        <i data-feather="plus" class="icon-sm"></i>
+        <i data-feather="plus" style="margin-right: 8px; width: 18px"></i>
         <span>Tambah Anggaran</span>
       </button>
     </div>

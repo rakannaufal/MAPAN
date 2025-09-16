@@ -1,6 +1,7 @@
 <script setup>
 import { ref, watch, nextTick, computed } from "vue";
 import { useFinanceStore } from "@/store/finance";
+import { getGoalSuggestion } from "@/services/aiAssistant.js";
 import feather from "feather-icons";
 
 const financeStore = useFinanceStore();
@@ -8,7 +9,12 @@ const financeStore = useFinanceStore();
 // State untuk form Tambah/Edit Target
 const showForm = ref(false);
 const editingGoalId = ref(null);
-const initialFormState = { name: "", target_amount: null, current_amount: 0 };
+const initialFormState = {
+  name: "",
+  target_amount: null,
+  current_amount: 0,
+  target_date: null,
+};
 const formGoal = ref({ ...initialFormState });
 const formattedTargetAmount = ref("");
 const formattedCurrentAmount = ref("");
@@ -18,6 +24,27 @@ const showAddFundsModal = ref(false);
 const selectedGoal = ref(null);
 const amountToAdd = ref(null);
 const formattedAmountToAdd = ref("");
+
+// State untuk Modal Asisten AI
+const showAiModal = ref(false);
+const aiSuggestionFrequency = ref("weekly"); // 'daily', 'weekly', 'monthly'
+
+// Computed property untuk menghitung rekomendasi AI secara reaktif
+const aiAnalysisResult = computed(() => {
+  if (!showAiModal.value || !selectedGoal.value) {
+    return null;
+  }
+  return getGoalSuggestion(
+    {
+      targetAmount: selectedGoal.value.target_amount,
+      currentAmount: selectedGoal.value.current_amount,
+      targetDate: selectedGoal.value.target_date,
+      monthlyIncome: financeStore.currentMonthCashFlow.income,
+      monthlyExpense: financeStore.currentMonthCashFlow.expense,
+    },
+    aiSuggestionFrequency.value
+  );
+});
 
 // --- FUNGSI-FUNGSI UTAMA ---
 
@@ -62,7 +89,7 @@ const handleAddFunds = async () => {
   if (!selectedGoal.value || !amountToAdd.value) return;
   try {
     await financeStore.addFundsToGoal(selectedGoal.value.id, amountToAdd.value);
-    showAddFundsModal.value = false; // Tutup modal jika berhasil
+    showAddFundsModal.value = false;
   } catch (e) {
     alert(e.message);
   }
@@ -93,9 +120,25 @@ const handleDelete = async (id) => {
   }
 };
 
-// --- WATCHERS UNTUK FORMAT ANGKA REAL-TIME ---
+// Fungsi untuk membuka modal AI
+const openAiAssistant = (goal) => {
+  selectedGoal.value = goal;
+  aiSuggestionFrequency.value = "weekly"; // Reset ke default saat membuka
+  showAiModal.value = true;
+};
 
-// Watcher untuk "Jumlah Target"
+// Fungsi untuk menerapkan saran AI
+const applyAiSuggestion = () => {
+  if (aiAnalysisResult.value && aiAnalysisResult.value.suggestion > 0) {
+    openAddFundsModal(selectedGoal.value);
+    formattedAmountToAdd.value = new Intl.NumberFormat("id-ID").format(
+      aiAnalysisResult.value.suggestion
+    );
+    showAiModal.value = false;
+  }
+};
+
+// --- WATCHERS UNTUK FORMAT ANGKA REAL-TIME ---
 watch(formattedTargetAmount, (newValue) => {
   if (!newValue) {
     formGoal.value.target_amount = null;
@@ -112,7 +155,6 @@ watch(formattedTargetAmount, (newValue) => {
   }
 });
 
-// Watcher untuk "Dana Saat Ini" (saat edit)
 watch(formattedCurrentAmount, (newValue) => {
   if (!newValue) {
     formGoal.value.current_amount = 0;
@@ -129,7 +171,6 @@ watch(formattedCurrentAmount, (newValue) => {
   }
 });
 
-// Watcher untuk modal "Tambah Dana"
 watch(formattedAmountToAdd, (newValue) => {
   if (!newValue) {
     amountToAdd.value = null;
@@ -148,7 +189,6 @@ watch(formattedAmountToAdd, (newValue) => {
 });
 
 // --- FUNGSI BANTU & LIFECYCLE HOOK ---
-
 const formatCurrency = (value) =>
   new Intl.NumberFormat("id-ID", {
     style: "currency",
@@ -156,9 +196,16 @@ const formatCurrency = (value) =>
     minimumFractionDigits: 0,
   }).format(value || 0);
 
-// Watcher untuk me-render ulang ikon setiap kali daftar berubah
+const calculateDaysRemaining = (targetDate) => {
+  if (!targetDate) return null;
+  const diff = new Date(targetDate) - new Date();
+  if (diff <= 0) return "Terlewat";
+  const days = Math.ceil(diff / (1000 * 60 * 60 * 24));
+  return `${days} hari lagi`;
+};
+
 watch(
-  () => financeStore.goals,
+  () => [financeStore.goals, showAiModal.value, showForm.value],
   () => {
     nextTick(() => {
       feather.replace();
@@ -178,7 +225,6 @@ watch(
       </button>
     </div>
 
-    <!-- Form untuk Tambah & Edit Target -->
     <div v-if="showForm" class="card form-card fade-in">
       <form @submit.prevent="handleSubmit">
         <h3 class="form-title">
@@ -195,7 +241,6 @@ watch(
               class="form-input"
             />
           </div>
-
           <div v-if="editingGoalId" class="form-group">
             <label>Dana Saat Ini (Rp)</label>
             <input
@@ -207,7 +252,6 @@ watch(
               class="form-input text-right"
             />
           </div>
-
           <div class="form-group">
             <label>Jumlah Target (Rp)</label>
             <input
@@ -217,6 +261,14 @@ watch(
               placeholder="0"
               required
               class="form-input text-right"
+            />
+          </div>
+          <div class="form-group">
+            <label>Tanggal Target Tercapai</label>
+            <input
+              v-model="formGoal.target_date"
+              type="date"
+              class="form-input"
             />
           </div>
         </div>
@@ -264,10 +316,28 @@ watch(
             </button>
           </div>
         </div>
-        <p class="goal-amount">
-          {{ formatCurrency(goal.current_amount) }} /
-          <span>{{ formatCurrency(goal.target_amount) }}</span>
-        </p>
+        <div class="goal-meta">
+          <p class="goal-amount">
+            {{ formatCurrency(goal.current_amount) }} /
+            <span>{{ formatCurrency(goal.target_amount) }}</span>
+          </p>
+          <div v-if="goal.target_date" class="target-date-row">
+            <p class="target-date">
+              <i data-feather="calendar" class="icon-xs"></i>
+              Target:
+              {{
+                new Date(goal.target_date).toLocaleDateString("id-ID", {
+                  day: "numeric",
+                  month: "long",
+                  year: "numeric",
+                })
+              }}
+            </p>
+            <span class="days-remaining">{{
+              calculateDaysRemaining(goal.target_date)
+            }}</span>
+          </div>
+        </div>
         <div class="progress-bar-container">
           <div
             class="progress-bar"
@@ -288,13 +358,17 @@ watch(
         </p>
         <div class="goal-footer">
           <button
+            class="button button-secondary ai-btn"
+            @click="openAiAssistant(goal)"
+          >
+            <i data-feather="cpu" class="icon-sm"></i>
+            Saran AI
+          </button>
+          <button
             class="button button-primary add-funds-btn"
             @click="openAddFundsModal(goal)"
           >
-            <i
-              data-feather="plus-circle"
-              style="width: 18px; margin-right: 8px"
-            ></i>
+            <i data-feather="plus"></i>
             Tambah Dana
           </button>
         </div>
@@ -339,6 +413,59 @@ watch(
         </form>
       </div>
     </div>
+
+    <div
+      v-if="showAiModal"
+      class="modal-overlay"
+      @click.self="showAiModal = false"
+    >
+      <div class="modal-content card fade-in">
+        <h3 class="form-title">
+          <i data-feather="cpu" class="icon-sm"></i> Asisten Finansial
+        </h3>
+        <div class="frequency-switcher">
+          <button
+            @click="aiSuggestionFrequency = 'daily'"
+            :class="{ active: aiSuggestionFrequency === 'daily' }"
+          >
+            Harian
+          </button>
+          <button
+            @click="aiSuggestionFrequency = 'weekly'"
+            :class="{ active: aiSuggestionFrequency === 'weekly' }"
+          >
+            Mingguan
+          </button>
+          <button
+            @click="aiSuggestionFrequency = 'monthly'"
+            :class="{ active: aiSuggestionFrequency === 'monthly' }"
+          >
+            Bulanan
+          </button>
+        </div>
+        <div v-if="aiAnalysisResult" class="ai-suggestion">
+          <p v-html="aiAnalysisResult.message"></p>
+        </div>
+        <div v-else class="loading-indicator"><p>Menganalisis...</p></div>
+        <div class="form-actions">
+          <button
+            type="button"
+            class="button button-secondary"
+            @click="showAiModal = false"
+          >
+            Tutup
+          </button>
+          <button
+            v-if="aiAnalysisResult && aiAnalysisResult.suggestion > 0"
+            type="button"
+            class="button button-primary"
+            @click="applyAiSuggestion"
+          >
+            Setuju & Tambah Dana
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -372,6 +499,9 @@ watch(
   font-size: 18px;
   margin-bottom: 16px;
   font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 .form-grid {
   display: grid;
@@ -438,15 +568,38 @@ watch(
 .delete-btn:hover {
   color: var(--accent-red);
 }
+.goal-meta {
+  margin: 16px 0 8px 0;
+}
 .goal-amount {
   font-size: 20px;
   font-weight: 600;
-  margin: 16px 0;
 }
 .goal-amount span {
   font-size: 14px;
   color: var(--text-secondary);
   font-weight: 500;
+}
+.target-date-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 8px;
+}
+.target-date {
+  font-size: 13px;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  margin: 0;
+}
+.days-remaining {
+  font-size: 12px;
+  font-weight: 500;
+  background-color: #e2e8f0;
+  color: var(--text-primary);
+  padding: 2px 8px;
+  border-radius: 99px;
 }
 .progress-bar-container {
   width: 100%;
@@ -479,9 +632,18 @@ watch(
   border-top: 1px solid var(--border-color);
   padding-top: 16px;
   display: flex;
+  gap: 12px;
 }
-.add-funds-btn {
-  width: 100%;
+.add-funds-btn,
+.ai-btn {
+  flex: 1;
+}
+.ai-btn {
+  background-color: #e2e8f0;
+  color: var(--text-primary);
+}
+.ai-btn:hover {
+  background-color: #cbd5e0;
 }
 .modal-overlay {
   position: fixed;
@@ -504,17 +666,46 @@ watch(
   margin-bottom: 24px;
   color: var(--text-secondary);
 }
-@media (max-width: 768px) {
-  .dashboard-grid {
-    grid-template-columns: 1fr;
-  }
-  .page-title {
-    font-size: 24px;
-  }
+.ai-suggestion p {
+  line-height: 1.7;
+  color: var(--text-primary);
 }
-@media (max-width: 1024px) {
-  .chart-grid {
-    grid-template-columns: 1fr;
-  }
+.ai-suggestion strong {
+  color: var(--primary-color);
+  font-weight: 600;
+}
+.icon-xs {
+  width: 14px;
+  height: 14px;
+  margin-right: 6px;
+}
+.icon-sm {
+  width: 16px;
+  height: 16px;
+  margin-right: 8px;
+}
+.frequency-switcher {
+  display: flex;
+  justify-content: center;
+  background-color: #f3f4f6;
+  border-radius: 8px;
+  padding: 4px;
+  margin-bottom: 24px;
+}
+.frequency-switcher button {
+  flex: 1;
+  background: none;
+  border: none;
+  padding: 6px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+  color: var(--text-secondary);
+  transition: all 0.2s ease;
+}
+.frequency-switcher button.active {
+  background-color: var(--surface-color);
+  color: var(--primary-color);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 </style>

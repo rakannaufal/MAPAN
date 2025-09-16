@@ -1,7 +1,11 @@
 <script setup>
-import { computed, onMounted, nextTick } from "vue";
+import { computed, onMounted, nextTick, ref, watch } from "vue";
 import { useFinanceStore } from "@/store/finance";
-import { Doughnut as DoughnutChart, Line as LineChart } from "vue-chartjs";
+import {
+  Doughnut as DoughnutChart,
+  Line as LineChart,
+  Bar as BarChart,
+} from "vue-chartjs";
 import {
   Chart,
   Title,
@@ -13,6 +17,7 @@ import {
   PointElement,
   LineElement,
   Filler,
+  BarElement,
 } from "chart.js";
 import feather from "feather-icons";
 
@@ -25,10 +30,63 @@ Chart.register(
   LinearScale,
   PointElement,
   LineElement,
-  Filler
+  Filler,
+  BarElement
 );
 
 const financeStore = useFinanceStore();
+
+const activeFilter = ref("6m");
+const filters = [
+  { key: "7d", label: "7H" },
+  { key: "1m", label: "1B" },
+  { key: "6m", label: "6B" },
+  { key: "1y", label: "1T" },
+  { key: "5y", label: "5T" },
+];
+
+const greeting = computed(() => {
+  const hour = new Date().getHours();
+  const userName = financeStore.user?.email.split("@")[0] || "Pengguna";
+  const capitalizedUserName =
+    userName.charAt(0).toUpperCase() + userName.slice(1);
+  if (hour < 11) return `Selamat Pagi, ${capitalizedUserName}!`;
+  if (hour < 15) return `Selamat Siang, ${capitalizedUserName}!`;
+  if (hour < 19) return `Selamat Sore, ${capitalizedUserName}!`;
+  return `Selamat Malam, ${capitalizedUserName}!`;
+});
+
+const keyInsight = computed(() => {
+  if (financeStore.loading)
+    return { message: "Menganalisis data...", icon: "loader" };
+  const { income, expense } = financeStore.currentMonthCashFlow;
+  if (income === 0 && expense === 0 && financeStore.transactions.length === 0)
+    return {
+      message: "Selamat datang! Mulai catat transaksi pertamamu.",
+      icon: "edit-3",
+    };
+  if (expense > income)
+    return {
+      message: `Pengeluaran bulan ini lebih besar dari pemasukan.`,
+      icon: "trending-down",
+    };
+  const expenses = financeStore.expenseByCategory;
+  const largestExpense = Object.entries(expenses).sort(
+    (a, b) => b[1] - a[1]
+  )[0];
+  if (largestExpense)
+    return {
+      message: `Pengeluaran terbesarmu bulan ini adalah <strong>${largestExpense[0]}</strong>.`,
+      icon: "alert-triangle",
+    };
+  if (income > expense)
+    return {
+      message: "Manajemen keuanganmu bulan ini terlihat baik!",
+      icon: "check-circle",
+    };
+  return { message: "Terus pantau kondisi keuanganmu.", icon: "eye" };
+});
+
 const formatCurrency = (value) =>
   new Intl.NumberFormat("id-ID", {
     style: "currency",
@@ -36,18 +94,16 @@ const formatCurrency = (value) =>
     minimumFractionDigits: 0,
   }).format(value || 0);
 
-const closestGoal = computed(() => {
-  if (!financeStore.goals || financeStore.goals.length === 0) return null;
-  return (
-    [...financeStore.goals]
-      .map((g) => ({
-        ...g,
-        progress:
-          g.target_amount > 0 ? (g.current_amount / g.target_amount) * 100 : 0,
-      }))
-      .filter((g) => g.progress < 100)
-      .sort((a, b) => b.progress - a.progress)[0] || null
-  );
+const sortedActiveGoals = computed(() => {
+  if (!financeStore.goals || financeStore.goals.length === 0) return [];
+  return [...financeStore.goals]
+    .map((g) => ({
+      ...g,
+      progress:
+        g.target_amount > 0 ? (g.current_amount / g.target_amount) * 100 : 0,
+    }))
+    .filter((g) => g.progress < 100)
+    .sort((a, b) => b.progress - a.progress);
 });
 
 const doughnutChartData = computed(() => {
@@ -65,51 +121,96 @@ const doughnutChartData = computed(() => {
   ];
   return {
     labels,
-    datasets: [{ backgroundColor: colors, data }],
+    datasets: [{ backgroundColor: colors.slice(0, labels.length), data }],
   };
 });
 
 const lineChartData = computed(() => financeStore.netWorthTrend);
+const barChartData = computed(() =>
+  financeStore.getCashFlowTrendByPeriod(activeFilter.value)
+);
+
 const chartOptions = {
   responsive: true,
   maintainAspectRatio: false,
-  plugins: { legend: { position: "right" } },
+  plugins: { legend: { position: "bottom" } },
 };
 const lineChartOptions = {
   responsive: true,
   maintainAspectRatio: false,
   plugins: { legend: { display: false } },
 };
+const barChartOptions = {
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: { legend: { position: "top" } },
+  scales: { y: { beginAtZero: true } },
+};
 
-onMounted(() => {
-  nextTick(() => feather.replace());
-});
+watch(
+  () => [financeStore.loading, sortedActiveGoals.value, activeFilter.value],
+  (values) => {
+    if (!values[0]) {
+      nextTick(() => {
+        feather.replace();
+      });
+    }
+  },
+  { deep: true, immediate: true }
+);
 </script>
 
 <template>
   <div class="page-container">
-    <h1 class="page-title">Dashboard</h1>
-    <div v-if="financeStore.loading" class="loading-indicator">
-      Memuat data...
+    <div class="header-section">
+      <div>
+        <h1 class="page-title">Dashboard</h1>
+        <p class="greeting-text">{{ greeting }}</p>
+      </div>
     </div>
-    <div v-else>
+
+    <div v-if="financeStore.loading">
+      <div
+        class="card insight-card skeleton"
+        style="height: 78px; margin-bottom: 24px"
+      ></div>
       <div class="dashboard-grid">
-        <div class="card summary-card fade-in">
-          <div class="icon-wrapper bg-blue">
-            <i data-feather="trending-up"></i>
+        <div v-for="n in 4" :key="n" class="card summary-card skeleton"></div>
+      </div>
+      <div
+        class="card chart-card skeleton"
+        style="height: 480px; margin-top: 24px"
+      ></div>
+    </div>
+
+    <div v-else>
+      <div class="card insight-card fade-in">
+        <div class="icon-wrapper bg-blue">
+          <i :data-feather="keyInsight.icon"></i>
+        </div>
+        <p v-html="keyInsight.message"></p>
+      </div>
+
+      <div class="dashboard-grid">
+        <div class="card summary-card fade-in" style="animation-delay: 100ms">
+          <div class="icon-wrapper bg-gradient-blue">
+            <i data-feather="dollar-sign"></i>
           </div>
           <div class="text-content">
             <h3>Kekayaan Bersih</h3>
             <p
               class="amount"
-              :class="financeStore.netWorth >= 0 ? 'green' : 'red'"
+              :class="{
+                green: financeStore.netWorth >= 0,
+                red: financeStore.netWorth < 0,
+              }"
             >
               {{ formatCurrency(financeStore.netWorth) }}
             </p>
           </div>
         </div>
-        <div class="card summary-card fade-in" style="animation-delay: 100ms">
-          <div class="icon-wrapper bg-green">
+        <div class="card summary-card fade-in" style="animation-delay: 200ms">
+          <div class="icon-wrapper bg-gradient-green">
             <i data-feather="arrow-down-circle"></i>
           </div>
           <div class="text-content">
@@ -119,8 +220,8 @@ onMounted(() => {
             </p>
           </div>
         </div>
-        <div class="card summary-card fade-in" style="animation-delay: 200ms">
-          <div class="icon-wrapper bg-red">
+        <div class="card summary-card fade-in" style="animation-delay: 300ms">
+          <div class="icon-wrapper bg-gradient-red">
             <i data-feather="arrow-up-circle"></i>
           </div>
           <div class="text-content">
@@ -130,33 +231,77 @@ onMounted(() => {
             </p>
           </div>
         </div>
-        <div class="card summary-card fade-in" style="animation-delay: 300ms">
-          <div class="icon-wrapper bg-yellow"><i data-feather="flag"></i></div>
+        <div class="card summary-card fade-in" style="animation-delay: 400ms">
+          <div class="icon-wrapper bg-gradient-purple">
+            <i data-feather="shield"></i>
+          </div>
           <div class="text-content">
-            <h3>Target Terdekat</h3>
-            <template v-if="closestGoal">
-              <p class="goal-name">{{ closestGoal.name }}</p>
-              <div class="progress-details">
-                <div class="progress-bar-container">
-                  <div
-                    class="progress-bar"
-                    :style="{ width: closestGoal.progress + '%' }"
-                  ></div>
-                </div>
-                <span class="percentage-text"
-                  >{{ closestGoal.progress.toFixed(1) }}%</span
-                >
+            <h3>Sisa Anggaran Bulan Ini</h3>
+            <p
+              class="amount"
+              :class="{
+                green: financeStore.budgetSummary.totalRemaining >= 0,
+                red: financeStore.budgetSummary.totalRemaining < 0,
+              }"
+            >
+              {{ formatCurrency(financeStore.budgetSummary.totalRemaining) }}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div class="section-container fade-in" style="animation-delay: 500ms">
+        <h3 class="section-title">Progres Target Aktif</h3>
+        <div v-if="sortedActiveGoals.length > 0" class="goals-slider-container">
+          <div class="goals-slider">
+            <div
+              v-for="goal in sortedActiveGoals"
+              :key="goal.id"
+              class="goal-card card"
+            >
+              <h4>{{ goal.name }}</h4>
+              <p class="goal-amount">
+                {{ formatCurrency(goal.current_amount) }} /
+                <span>{{ formatCurrency(goal.target_amount) }}</span>
+              </p>
+              <div class="progress-bar-container">
+                <div
+                  class="progress-bar"
+                  :style="{ width: goal.progress + '%' }"
+                ></div>
               </div>
-            </template>
-            <template v-else>
-              <p class="no-data-small">Belum ada target.</p>
-            </template>
+              <p class="percentage-label">{{ goal.progress.toFixed(1) }}%</p>
+            </div>
+          </div>
+        </div>
+        <p v-else class="no-data-small">
+          Belum ada target yang sedang berjalan.
+        </p>
+      </div>
+
+      <div class="chart-main-container">
+        <div class="card chart-card fade-in" style="animation-delay: 600ms">
+          <div class="chart-header">
+            <h3>Pemasukan vs Pengeluaran</h3>
+            <div class="filter-pills">
+              <button
+                v-for="filter in filters"
+                :key="filter.key"
+                :class="{ active: activeFilter === filter.key }"
+                @click="activeFilter = filter.key"
+              >
+                {{ filter.label }}
+              </button>
+            </div>
+          </div>
+          <div class="chart-wrapper-large">
+            <BarChart :data="barChartData" :options="barChartOptions" />
           </div>
         </div>
       </div>
 
       <div class="chart-grid">
-        <div class="card chart-card fade-in" style="animation-delay: 400ms">
+        <div class="card chart-card fade-in" style="animation-delay: 700ms">
           <h3>Tren Kekayaan Bersih</h3>
           <div class="chart-wrapper">
             <LineChart
@@ -169,7 +314,7 @@ onMounted(() => {
             </p>
           </div>
         </div>
-        <div class="card chart-card fade-in" style="animation-delay: 500ms">
+        <div class="card chart-card fade-in" style="animation-delay: 800ms">
           <h3>Pengeluaran per Kategori</h3>
           <div class="chart-wrapper">
             <DoughnutChart
@@ -196,35 +341,55 @@ onMounted(() => {
     transform: translateY(0);
   }
 }
+@keyframes skeleton-loading {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
 .fade-in {
   animation: fadeIn 0.5s ease-out forwards;
   opacity: 0;
 }
+.header-section {
+  margin-bottom: 24px;
+}
 .page-title {
   font-size: 32px;
-  margin-bottom: 24px;
   font-weight: 700;
   color: var(--text-primary);
 }
-.loading-indicator {
-  text-align: center;
+.greeting-text {
   color: var(--text-secondary);
-  padding: 40px;
 }
+
+/* --- PERBAIKAN UTAMA DI SINI --- */
 .dashboard-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 24px;
+  /* Paksa 2 kolom di semua ukuran layar */
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
 }
+
 .summary-card {
   display: flex;
-  align-items: center;
-  gap: 20px;
+  flex-direction: column; /* Ubah arah flex menjadi kolom */
+  align-items: flex-start; /* Rata kiri */
+  gap: 12px;
+  padding: 16px;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
+.summary-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+}
+
 .icon-wrapper {
   flex-shrink: 0;
-  width: 52px;
-  height: 52px;
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -232,33 +397,80 @@ onMounted(() => {
   color: white;
 }
 .icon-wrapper i {
-  width: 24px;
-  height: 24px;
+  width: 20px;
+  height: 20px;
 }
-.icon-wrapper.bg-blue {
-  background-color: var(--primary-color);
-}
-.icon-wrapper.bg-green {
-  background-color: var(--accent-green);
-}
-.icon-wrapper.bg-red {
-  background-color: var(--accent-red);
-}
-.icon-wrapper.bg-yellow {
-  background-color: #f6ad55;
-}
+
 .text-content {
   width: 100%;
+  overflow: hidden;
 }
 .text-content h3 {
   color: var(--text-secondary);
   font-weight: 500;
-  font-size: 14px;
-  margin-bottom: 4px;
+  font-size: 12px;
+  margin-bottom: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .text-content .amount {
-  font-size: 24px;
+  font-size: 18px;
   font-weight: 600;
+  white-space: nowrap;
+}
+
+/* Aturan untuk layar yang lebih besar (tablet ke atas) untuk mengembalikan gaya semula */
+@media (min-width: 768px) {
+  .dashboard-grid {
+    grid-template-columns: repeat(4, 1fr); /* 4 kolom di desktop */
+    gap: 24px;
+  }
+  .summary-card {
+    flex-direction: row; /* Kembalikan ke baris */
+    align-items: center;
+    gap: 20px;
+    padding: 24px;
+  }
+  .icon-wrapper {
+    width: 52px;
+    height: 52px;
+  }
+  .icon-wrapper i {
+    width: 24px;
+    height: 24px;
+  }
+  .text-content h3 {
+    font-size: 14px;
+  }
+  .text-content .amount {
+    font-size: 24px;
+  }
+}
+/* --- AKHIR DARI PERBAIKAN --- */
+
+.bg-gradient-blue {
+  background-image: linear-gradient(
+    45deg,
+    #4299e1 0%,
+    var(--primary-color) 100%
+  );
+}
+.bg-gradient-green {
+  background-image: linear-gradient(
+    45deg,
+    #68d391 0%,
+    var(--accent-green) 100%
+  );
+}
+.bg-gradient-red {
+  background-image: linear-gradient(45deg, #fc8181 0%, var(--accent-red) 100%);
+}
+.bg-gradient-yellow {
+  background-image: linear-gradient(45deg, #f6e05e 0%, #f6ad55 100%);
+}
+.bg-gradient-purple {
+  background-image: linear-gradient(45deg, #a78bfa 0%, #7c3aed 100%);
 }
 .text-content .amount.green {
   color: var(--accent-green);
@@ -266,26 +478,59 @@ onMounted(() => {
 .text-content .amount.red {
   color: var(--accent-red);
 }
-.goal-name {
+.section-container {
+  margin-top: 24px;
+}
+.section-title {
+  font-size: 20px;
   font-weight: 600;
+  margin-bottom: 16px;
+  color: var(--text-primary);
+}
+.goals-slider-container {
+  overflow-x: auto;
+  scroll-behavior: smooth;
+  scroll-snap-type: x mandatory;
+  padding-bottom: 16px;
+}
+.goals-slider-container::-webkit-scrollbar {
+  display: none;
+}
+.goals-slider-container {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.goals-slider {
+  display: flex;
+  gap: 24px;
+}
+.goal-card {
+  flex: 0 0 280px;
+  scroll-snap-align: start;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+.goal-card h4 {
   font-size: 16px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  font-weight: 600;
   margin-bottom: 8px;
 }
-.progress-details {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-top: 4px;
+.goal-amount {
+  font-size: 18px;
+  font-weight: 500;
+  margin-bottom: auto;
+  padding-bottom: 12px;
+}
+.goal-amount span {
+  font-size: 14px;
+  color: var(--text-secondary);
 }
 .progress-bar-container {
-  flex-grow: 1;
   width: 100%;
   background-color: #e9ecef;
   border-radius: 99px;
-  height: 8px;
+  height: 10px;
   overflow: hidden;
 }
 .progress-bar {
@@ -294,15 +539,60 @@ onMounted(() => {
   border-radius: 99px;
   transition: width 0.5s ease-in-out;
 }
-.percentage-text {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-primary);
-  flex-shrink: 0;
+.percentage-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 6px;
+  text-align: right;
 }
 .no-data-small {
   font-size: 14px;
   color: var(--text-secondary);
+  margin-top: 16px;
+}
+.chart-main-container {
+  margin-top: 24px;
+}
+.chart-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+.chart-header h3 {
+  font-size: 18px;
+  margin: 0;
+  flex-grow: 1;
+}
+.filter-pills {
+  display: flex;
+  gap: 8px;
+  background-color: #f3f4f6;
+  padding: 4px;
+  border-radius: 99px;
+  flex-shrink: 0;
+}
+.filter-pills button {
+  background: none;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 99px;
+  cursor: pointer;
+  font-weight: 500;
+  font-size: 13px;
+  color: var(--text-secondary);
+  transition: all 0.2s ease;
+}
+.filter-pills button.active {
+  background-color: var(--surface-color);
+  color: var(--primary-color);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+.chart-wrapper-large {
+  position: relative;
+  height: 400px;
 }
 .chart-grid {
   display: grid;
@@ -310,9 +600,9 @@ onMounted(() => {
   gap: 24px;
   margin-top: 24px;
 }
-@media (min-width: 1024px) {
+@media (min-width: 768px) {
   .chart-grid {
-    grid-template-columns: 2fr 1fr;
+    grid-template-columns: 1fr 1fr;
   }
 }
 .chart-card h3 {
@@ -328,17 +618,55 @@ onMounted(() => {
   color: var(--text-secondary);
   padding: 20px 0;
 }
-@media (max-width: 768px) {
-  .dashboard-grid {
-    grid-template-columns: 1fr;
+.insight-card {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  margin-bottom: 24px;
+  background-color: #ebf4ff;
+  border-color: #bee3f8;
+  opacity: 0;
+}
+.insight-card p {
+  font-weight: 500;
+  color: var(--text-primary);
+}
+.insight-card .icon-wrapper.bg-blue {
+  background-color: var(--primary-color);
+}
+.skeleton {
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: skeleton-loading 1.5s infinite;
+  border-radius: var(--border-radius);
+}
+.skeleton.summary-card {
+  height: 122px;
+}
+@media (min-width: 768px) {
+  .skeleton.summary-card {
+    height: 98px;
   }
+}
+.skeleton.goal-card {
+  height: 160px;
+}
+.skeleton.chart-card {
+  height: 428px;
+}
+@media (max-width: 768px) {
   .page-title {
     font-size: 24px;
   }
-}
-@media (max-width: 1024px) {
-  .chart-grid {
-    grid-template-columns: 1fr;
+  .chart-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .filter-pills {
+    justify-content: center;
+  }
+  .chart-wrapper-large {
+    height: 300px;
   }
 }
 </style>
