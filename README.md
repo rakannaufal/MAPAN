@@ -1,3 +1,9 @@
+Tentu, saya mengerti. Anda ingin file `README.md` yang lengkap disajikan langsung di sini.
+
+Berikut adalah kodingan lengkap untuk file `README.md` Anda, yang sudah disesuaikan dengan semua fitur canggih yang telah kita bangun. Cukup salin teks di bawah ini dan tempelkan ke dalam file `README.md` di proyek Anda.
+
+---
+
 # Mapan - Asisten Keuangan Pribadi Cerdas
 
 **Mapan** adalah aplikasi web modern yang dirancang untuk menjadi lebih dari sekadar pencatat keuangan. Dengan antarmuka yang bersih, fitur cerdas, dan visualisasi data yang kaya, Mapan membantu Anda memahami, merencanakan, dan mencapai tujuan finansial Anda dengan percaya diri.
