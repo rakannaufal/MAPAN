@@ -4,6 +4,9 @@ import { useRouter } from "vue-router";
 import { useFinanceStore } from "@/store/finance";
 import feather from "feather-icons";
 
+// --- PERUBAHAN #1: Impor file logo dari folder assets ---
+import logoMapan from "@/assets/mapan.png";
+
 // Props dan emits untuk fungsionalitas mobile
 const props = defineProps({
   isOpen: Boolean,
@@ -13,10 +16,8 @@ const emit = defineEmits(["close-sidebar"]);
 const financeStore = useFinanceStore();
 const router = useRouter();
 
-// --- PERUBAHAN #1: Menambahkan variabel untuk versi aplikasi ---
-const appVersion = "1.0.0"; // Mudah diubah di sini jika ada update
+const appVersion = "1.0.0";
 
-// Computed properties untuk menampilkan info pengguna
 const userName = computed(() => {
   if (financeStore.user && financeStore.user.email) {
     return financeStore.user.email.split("@")[0];
@@ -28,7 +29,6 @@ const userInitial = computed(() => {
   return userName.value.charAt(0).toUpperCase();
 });
 
-// Daftar item navigasi utama
 const navItems = [
   { name: "Dashboard", path: "/", icon: "home" },
   { name: "Transaksi", path: "/transactions", icon: "list" },
@@ -37,20 +37,17 @@ const navItems = [
   { name: "Laporan", path: "/reports", icon: "bar-chart-2" },
 ];
 
-// Fungsi untuk logout
 const logout = async () => {
   await financeStore.signOut();
   router.push("/auth");
 };
 
-// Menutup sidebar mobile saat link di-klik
 const handleNavLinkClick = () => {
   if (props.isOpen) {
     emit("close-sidebar");
   }
 };
 
-// Merender ikon saat komponen dimuat
 onMounted(() => {
   nextTick(() => {
     feather.replace();
@@ -61,7 +58,8 @@ onMounted(() => {
 <template>
   <aside class="sidebar no-print" :class="{ 'is-open': isOpen }">
     <div class="sidebar-header">
-      <h1 class="logo">MAPAN</h1>
+      <!-- --- PERUBAHAN #2: Ganti <h1> dengan <img> --- -->
+      <img :src="logoMapan" alt="Mapan Logo" class="logo-img" />
     </div>
 
     <div class="user-profile-section">
@@ -74,7 +72,6 @@ onMounted(() => {
 
     <nav class="sidebar-nav">
       <ul>
-        <!-- Looping untuk item navigasi utama -->
         <li v-for="item in navItems" :key="item.path">
           <router-link
             :to="item.path"
@@ -88,7 +85,6 @@ onMounted(() => {
 
         <li class="nav-divider"></li>
 
-        <!-- Tombol Logout -->
         <li>
           <button @click="logout" class="nav-link logout-button">
             <i data-feather="log-out" class="nav-icon"></i>
@@ -97,14 +93,13 @@ onMounted(() => {
         </li>
       </ul>
 
-      <!-- --- PERUBAHAN #2: Menambahkan elemen untuk versi aplikasi --- -->
       <div class="app-version">Mapan v{{ appVersion }}</div>
     </nav>
   </aside>
 </template>
 
 <style scoped>
-/* Main container for the sidebar */
+/* --- PERUBAHAN #3: Hapus style .logo dan tambahkan .logo-img --- */
 .sidebar {
   width: 256px;
   background-color: var(--surface-color);
@@ -116,17 +111,17 @@ onMounted(() => {
   z-index: 1001;
 }
 
-/* Header section containing the logo */
 .sidebar-header {
   padding: 24px;
   text-align: center;
   border-bottom: 1px solid var(--border-color);
   flex-shrink: 0;
 }
-.logo {
-  font-size: 24px;
-  font-weight: 700;
-  color: var(--primary-color);
+
+.logo-img {
+  max-width: 100px; /* Atur lebar maksimum logo */
+  height: auto; /* Jaga rasio aspek gambar */
+  margin: 0 auto; /* Posisikan di tengah */
 }
 
 /* Bagian profil pengguna */
@@ -171,21 +166,19 @@ onMounted(() => {
   overflow: hidden;
 }
 
-/* Navigasi sekarang mengisi semua sisa ruang */
+/* Navigasi */
 .sidebar-nav {
   flex-grow: 1;
   padding: 16px;
   overflow-y: auto;
   display: flex;
-  flex-direction: column; /* Penting untuk mendorong versi ke bawah */
+  flex-direction: column;
 }
 .sidebar-nav ul {
   list-style: none;
   padding: 0;
   margin: 0;
 }
-
-/* Styling untuk semua item di navigasi (link dan tombol) */
 .nav-link {
   display: flex;
   align-items: center;
@@ -232,17 +225,16 @@ onMounted(() => {
   color: var(--accent-red);
 }
 
-/* --- STYLE BARU #3: Untuk teks versi aplikasi --- */
 .app-version {
-  margin-top: auto; /* Ajaib! Mendorong elemen ini ke paling bawah */
-  padding-top: 16px; /* Memberi jarak dari elemen di atasnya */
+  margin-top: auto;
+  padding-top: 16px;
   text-align: center;
   font-size: 12px;
   color: var(--text-secondary);
-  user-select: none; /* Mencegah teks bisa di-highlight */
+  user-select: none;
 }
 
-/* Aturan untuk mobile (tidak berubah) */
+/* Aturan untuk mobile */
 @media (max-width: 768px) {
   .sidebar {
     position: fixed;
