@@ -5,7 +5,7 @@ import { useFinanceStore } from "@/store/finance";
 import feather from "feather-icons";
 
 // --- PERUBAHAN #1: Impor file logo dari folder assets ---
-import logoMapan from "@/assets/mapan.png";
+import logoMapan from "../assets/mapan.png";
 
 // Props dan emits untuk fungsionalitas mobile
 const props = defineProps({
