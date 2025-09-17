@@ -414,7 +414,7 @@ watch(
   transition: all 0.2s ease;
 }
 .view-switcher button.active {
-  background-color: #fff;
+  background-color: var(--surface-color);
   color: var(--primary-color);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
@@ -473,7 +473,7 @@ watch(
   gap: 16px;
 }
 .summary-item {
-  background-color: #f7fafc;
+  background-color: var(--border-color);
   padding: 16px;
   border-radius: 8px;
   text-align: center;
@@ -512,6 +512,10 @@ watch(
   gap: 12px;
 }
 .goal-item {
+  background-color: var(--border-color);
+  padding: 16px;
+  border-radius: 8px;
+  text-align: center;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -524,7 +528,7 @@ watch(
 }
 .progress-bar-container {
   flex-grow: 1;
-  background-color: #e9ecef;
+  background-color: #f5eeee;
   border-radius: 99px;
   height: 8px;
 }
@@ -588,7 +592,7 @@ watch(
   gap: 16px;
 }
 .budget-item {
-  background-color: #f7fafc;
+  background-color: var(--border-color);
   padding: 12px;
   border-radius: 8px;
 }

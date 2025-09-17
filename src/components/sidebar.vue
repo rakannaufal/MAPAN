@@ -1,11 +1,11 @@
 <script setup>
-import { onMounted, nextTick, computed } from "vue";
+import { onMounted, nextTick, computed, watch } from "vue";
 import { useRouter } from "vue-router";
 import { useFinanceStore } from "@/store/finance";
+import { useThemeStore } from "@/store/theme";
 import feather from "feather-icons";
-
-// --- PERUBAHAN #1: Impor file logo dari folder assets ---
-import logoMapan from "@/assets/mapan.png";
+import logoDark from "@/assets/logo-dark.png";
+import logoLight from "@/assets/logo-light.png";
 
 // Props dan emits untuk fungsionalitas mobile
 const props = defineProps({
@@ -14,10 +14,17 @@ const props = defineProps({
 const emit = defineEmits(["close-sidebar"]);
 
 const financeStore = useFinanceStore();
+const themeStore = useThemeStore();
 const router = useRouter();
 
 const appVersion = "1.0.0";
 
+// Computed property untuk memilih logo secara dinamis
+const currentLogo = computed(() => {
+  return themeStore.theme === "light" ? logoDark : logoLight;
+});
+
+// Computed properties untuk menampilkan info pengguna
 const userName = computed(() => {
   if (financeStore.user && financeStore.user.email) {
     return financeStore.user.email.split("@")[0];
@@ -25,10 +32,9 @@ const userName = computed(() => {
   return "Pengguna";
 });
 
-const userInitial = computed(() => {
-  return userName.value.charAt(0).toUpperCase();
-});
+const userInitial = computed(() => userName.value.charAt(0).toUpperCase());
 
+// Daftar item navigasi utama
 const navItems = [
   { name: "Dashboard", path: "/", icon: "home" },
   { name: "Transaksi", path: "/transactions", icon: "list" },
@@ -37,29 +43,35 @@ const navItems = [
   { name: "Laporan", path: "/reports", icon: "bar-chart-2" },
 ];
 
+// Fungsi untuk logout
 const logout = async () => {
   await financeStore.signOut();
   router.push("/auth");
 };
 
+// Menutup sidebar mobile saat link di-klik
 const handleNavLinkClick = () => {
   if (props.isOpen) {
     emit("close-sidebar");
   }
 };
 
-onMounted(() => {
-  nextTick(() => {
-    feather.replace();
-  });
-});
+// Render ulang ikon saat komponen dimuat atau ada perubahan
+watch(
+  () => [props.isOpen, themeStore.theme],
+  () => {
+    nextTick(() => {
+      feather.replace();
+    });
+  },
+  { deep: true, immediate: true }
+);
 </script>
 
 <template>
   <aside class="sidebar no-print" :class="{ 'is-open': isOpen }">
     <div class="sidebar-header">
-      <!-- --- PERUBAHAN #2: Ganti <h1> dengan <img> --- -->
-      <img :src="logoMapan" alt="Mapan Logo" class="logo-img" />
+      <img :src="currentLogo" alt="Mapan Logo" class="logo-img" />
     </div>
 
     <div class="user-profile-section">
@@ -72,6 +84,7 @@ onMounted(() => {
 
     <nav class="sidebar-nav">
       <ul>
+        <!-- Looping untuk item navigasi utama -->
         <li v-for="item in navItems" :key="item.path">
           <router-link
             :to="item.path"
@@ -85,6 +98,33 @@ onMounted(() => {
 
         <li class="nav-divider"></li>
 
+        <!-- --- PERBAIKAN UTAMA DI SINI --- -->
+        <li class="theme-switcher-container">
+          <span class="theme-label">{{
+            themeStore.theme === "light" ? "Mode Terang" : "Mode Gelap"
+          }}</span>
+          <label class="theme-switch">
+            <input
+              type="checkbox"
+              :checked="themeStore.theme === 'dark'"
+              @change="themeStore.toggleTheme"
+              aria-label="Ganti tema"
+            />
+            <span class="switch-track">
+              <span class="switch-thumb">
+                <!-- Menggunakan v-if/v-else untuk memaksa render ulang ikon -->
+                <i
+                  v-if="themeStore.theme === 'light'"
+                  data-feather="sun"
+                  class="theme-icon sun-icon"
+                ></i>
+                <i v-else data-feather="moon" class="theme-icon moon-icon"></i>
+              </span>
+            </span>
+          </label>
+        </li>
+
+        <!-- Tombol Logout -->
         <li>
           <button @click="logout" class="nav-link logout-button">
             <i data-feather="log-out" class="nav-icon"></i>
@@ -99,7 +139,7 @@ onMounted(() => {
 </template>
 
 <style scoped>
-/* --- PERUBAHAN #3: Hapus style .logo dan tambahkan .logo-img --- */
+/* Main container for the sidebar */
 .sidebar {
   width: 256px;
   background-color: var(--surface-color);
@@ -107,30 +147,28 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
-  transition: transform 0.3s ease-in-out;
+  transition: transform 0.3s ease-in-out, background-color 0.3s ease;
   z-index: 1001;
 }
-
 .sidebar-header {
   padding: 24px;
   text-align: center;
   border-bottom: 1px solid var(--border-color);
   flex-shrink: 0;
+  transition: border-color 0.3s ease;
 }
-
 .logo-img {
-  max-width: 100px; /* Atur lebar maksimum logo */
-  height: auto; /* Jaga rasio aspek gambar */
-  margin: 0 auto; /* Posisikan di tengah */
+  max-width: 120px;
+  height: auto;
+  margin: 0 auto;
 }
-
-/* Bagian profil pengguna */
 .user-profile-section {
   display: flex;
   align-items: center;
   padding: 20px 24px;
   border-bottom: 1px solid var(--border-color);
   flex-shrink: 0;
+  transition: border-color 0.3s ease;
 }
 .avatar {
   width: 40px;
@@ -144,6 +182,7 @@ onMounted(() => {
   font-weight: 600;
   font-size: 18px;
   flex-shrink: 0;
+  transition: background-color 0.3s ease;
 }
 .user-info {
   margin-left: 12px;
@@ -165,8 +204,6 @@ onMounted(() => {
   text-overflow: ellipsis;
   overflow: hidden;
 }
-
-/* Navigasi */
 .sidebar-nav {
   flex-grow: 1;
   padding: 16px;
@@ -198,7 +235,7 @@ onMounted(() => {
   text-decoration: none;
 }
 .nav-link:hover {
-  background-color: #f3f4f6;
+  background-color: var(--background-color-light, #f3f4f6);
   text-decoration: none;
   color: var(--primary-color);
 }
@@ -208,23 +245,95 @@ onMounted(() => {
   font-weight: 600;
   box-shadow: 0 4px 10px rgba(26, 35, 126, 0.2);
 }
+body.dark-theme .nav-link.router-link-exact-active {
+  box-shadow: 0 4px 10px rgba(129, 140, 248, 0.2);
+}
 .nav-icon {
   width: 20px;
   height: 20px;
   margin-right: 16px;
 }
-
 .nav-divider {
   height: 1px;
   background-color: var(--border-color);
   margin: 8px 16px 16px;
+  transition: background-color 0.3s ease;
 }
-
 .logout-button:hover {
   background-color: #fef2f2;
   color: var(--accent-red);
 }
-
+body.dark-theme .logout-button:hover {
+  background-color: rgba(252, 129, 129, 0.1);
+}
+.theme-switcher-container {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 16px;
+  margin-bottom: 8px;
+}
+.theme-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+.theme-switch {
+  position: relative;
+  display: inline-block;
+  width: 50px;
+  height: 28px;
+}
+.theme-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+.switch-track {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: var(--background-color-light, #ccc);
+  transition: 0.4s;
+  border-radius: 28px;
+}
+.switch-thumb {
+  position: absolute;
+  content: "";
+  height: 22px;
+  width: 22px;
+  left: 3px;
+  bottom: 3px;
+  background-color: white;
+  transition: 0.4s;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.theme-icon {
+  width: 14px;
+  height: 14px;
+  transition: transform 0.4s ease;
+}
+.sun-icon {
+  color: #f6ad55;
+}
+.moon-icon {
+  color: var(--primary-color);
+}
+input:checked + .switch-track {
+  background-color: var(--primary-color);
+}
+input:checked + .switch-track .switch-thumb {
+  transform: translateX(22px);
+}
+input:checked + .switch-track .moon-icon {
+  transform: rotate(360deg);
+}
 .app-version {
   margin-top: auto;
   padding-top: 16px;
@@ -233,8 +342,6 @@ onMounted(() => {
   color: var(--text-secondary);
   user-select: none;
 }
-
-/* Aturan untuk mobile */
 @media (max-width: 768px) {
   .sidebar {
     position: fixed;

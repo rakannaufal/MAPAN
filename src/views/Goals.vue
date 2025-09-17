@@ -218,7 +218,7 @@ watch(
 <template>
   <div class="page-container">
     <div class="page-header">
-      <h1 class="page-title">Target Finansial</h1>
+      <h1 class="page-title">Target</h1>
       <button class="button button-primary" @click="handleAddNew">
         <i data-feather="plus" style="margin-right: 8px; width: 18px"></i>
         Tambah Target
@@ -264,7 +264,7 @@ watch(
             />
           </div>
           <div class="form-group">
-            <label>Tanggal Target Tercapai</label>
+            <label>Tanggal Tercapai</label>
             <input
               v-model="formGoal.target_date"
               type="date"
@@ -597,7 +597,7 @@ watch(
   font-size: 12px;
   font-weight: 500;
   background-color: #e2e8f0;
-  color: var(--text-primary);
+  color: var(--text-third);
   padding: 2px 8px;
   border-radius: 99px;
 }
@@ -640,7 +640,7 @@ watch(
 }
 .ai-btn {
   background-color: #e2e8f0;
-  color: var(--text-primary);
+  color: var(--text-third);
 }
 .ai-btn:hover {
   background-color: #cbd5e0;

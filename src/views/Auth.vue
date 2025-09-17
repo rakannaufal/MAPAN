@@ -2,7 +2,7 @@
   <div class="auth-container">
     <div class="auth-box">
       <div class="auth-header">
-        <h1 class="logo">Mapan</h1>
+        <h1 class="logo">MAPAN</h1>
         <p class="subtitle">
           {{ isLogin ? "Masuk untuk melanjutkan" : "Buat akun baru Anda" }}
         </p>

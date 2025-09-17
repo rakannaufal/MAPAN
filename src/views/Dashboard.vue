@@ -214,7 +214,7 @@ watch(
             <i data-feather="arrow-down-circle"></i>
           </div>
           <div class="text-content">
-            <h3>Pemasukan Bulan Ini</h3>
+            <h3>Pemasukan</h3>
             <p class="amount green">
               {{ formatCurrency(financeStore.currentMonthCashFlow.income) }}
             </p>
@@ -225,7 +225,7 @@ watch(
             <i data-feather="arrow-up-circle"></i>
           </div>
           <div class="text-content">
-            <h3>Pengeluaran Bulan Ini</h3>
+            <h3>Pengeluaran</h3>
             <p class="amount red">
               {{ formatCurrency(financeStore.currentMonthCashFlow.expense) }}
             </p>
@@ -623,8 +623,6 @@ watch(
   align-items: center;
   gap: 20px;
   margin-bottom: 24px;
-  background-color: #ebf4ff;
-  border-color: #bee3f8;
   opacity: 0;
 }
 .insight-card p {
