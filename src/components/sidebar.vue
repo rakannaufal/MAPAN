@@ -7,7 +7,6 @@ import feather from "feather-icons";
 import logoDark from "@/assets/logo-dark.png";
 import logoLight from "@/assets/logo-light.png";
 
-// Props dan emits untuk fungsionalitas mobile
 const props = defineProps({
   isOpen: Boolean,
 });
@@ -17,14 +16,12 @@ const financeStore = useFinanceStore();
 const themeStore = useThemeStore();
 const router = useRouter();
 
-const appVersion = "1.0.0";
+const appVersion = "1.1.0";
 
-// Computed property untuk memilih logo secara dinamis
 const currentLogo = computed(() => {
   return themeStore.theme === "light" ? logoDark : logoLight;
 });
 
-// Computed properties untuk menampilkan info pengguna
 const userName = computed(() => {
   if (financeStore.user && financeStore.user.email) {
     return financeStore.user.email.split("@")[0];
@@ -34,7 +31,6 @@ const userName = computed(() => {
 
 const userInitial = computed(() => userName.value.charAt(0).toUpperCase());
 
-// Daftar item navigasi utama
 const navItems = [
   { name: "Dashboard", path: "/", icon: "home" },
   { name: "Transaksi", path: "/transactions", icon: "list" },
@@ -43,20 +39,17 @@ const navItems = [
   { name: "Laporan", path: "/reports", icon: "bar-chart-2" },
 ];
 
-// Fungsi untuk logout
 const logout = async () => {
   await financeStore.signOut();
   router.push("/auth");
 };
 
-// Menutup sidebar mobile saat link di-klik
 const handleNavLinkClick = () => {
   if (props.isOpen) {
     emit("close-sidebar");
   }
 };
 
-// Render ulang ikon saat komponen dimuat atau ada perubahan
 watch(
   () => [props.isOpen, themeStore.theme],
   () => {
@@ -84,7 +77,6 @@ watch(
 
     <nav class="sidebar-nav">
       <ul>
-        <!-- Looping untuk item navigasi utama -->
         <li v-for="item in navItems" :key="item.path">
           <router-link
             :to="item.path"
@@ -96,9 +88,19 @@ watch(
           </router-link>
         </li>
 
+        <li>
+          <router-link
+            to="/profile"
+            class="nav-link"
+            @click="handleNavLinkClick"
+          >
+            <i data-feather="user" class="nav-icon"></i>
+            <span>Profil </span>
+          </router-link>
+        </li>
+
         <li class="nav-divider"></li>
 
-        <!-- --- PERBAIKAN UTAMA DI SINI --- -->
         <li class="theme-switcher-container">
           <span class="theme-label">{{
             themeStore.theme === "light" ? "Mode Terang" : "Mode Gelap"
@@ -112,19 +114,16 @@ watch(
             />
             <span class="switch-track">
               <span class="switch-thumb">
-                <!-- Menggunakan v-if/v-else untuk memaksa render ulang ikon -->
                 <i
-                  v-if="themeStore.theme === 'light'"
-                  data-feather="sun"
-                  class="theme-icon sun-icon"
+                  :key="themeStore.theme"
+                  :data-feather="themeStore.theme === 'light' ? 'sun' : 'moon'"
+                  class="theme-icon"
                 ></i>
-                <i v-else data-feather="moon" class="theme-icon moon-icon"></i>
               </span>
             </span>
           </label>
         </li>
 
-        <!-- Tombol Logout -->
         <li>
           <button @click="logout" class="nav-link logout-button">
             <i data-feather="log-out" class="nav-icon"></i>
@@ -139,7 +138,6 @@ watch(
 </template>
 
 <style scoped>
-/* Main container for the sidebar */
 .sidebar {
   width: 256px;
   background-color: var(--surface-color);
@@ -318,12 +316,7 @@ body.dark-theme .logout-button:hover {
   width: 14px;
   height: 14px;
   transition: transform 0.4s ease;
-}
-.sun-icon {
   color: #f6ad55;
-}
-.moon-icon {
-  color: var(--primary-color);
 }
 input:checked + .switch-track {
   background-color: var(--primary-color);
@@ -331,8 +324,8 @@ input:checked + .switch-track {
 input:checked + .switch-track .switch-thumb {
   transform: translateX(22px);
 }
-input:checked + .switch-track .moon-icon {
-  transform: rotate(360deg);
+input:checked + .switch-track .theme-icon {
+  color: var(--primary-color);
 }
 .app-version {
   margin-top: auto;

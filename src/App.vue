@@ -1,44 +1,146 @@
 <script setup>
-import { onMounted, ref, watch } from "vue";
+import { ref, watch, nextTick, computed, onMounted, onUnmounted } from "vue";
+import { useRoute, useRouter } from "vue-router";
 import { useFinanceStore } from "@/store/finance";
-import Sidebar from "@/components/sidebar.vue";
-import MobileHeader from "@/components/MobileHeader.vue";
+import { useThemeStore } from "@/store/theme";
+import Sidebar from "@/components/Sidebar.vue";
+import feather from "feather-icons";
 
 const financeStore = useFinanceStore();
+const themeStore = useThemeStore();
+const route = useRoute();
+const router = useRouter();
 
-const isSidebarOpen = ref(false);
+// --- LOGIKA BARU UNTUK AUTO LOGOUT ---
 
-const toggleSidebar = () => {
-  isSidebarOpen.value = !isSidebarOpen.value;
+let inactivityTimer = null;
+const INACTIVITY_TIMEOUT = 30 * 60 * 1000;
+
+// Daftar aksi pengguna yang dianggap sebagai aktivitas
+const activityEvents = [
+  "mousemove",
+  "mousedown",
+  "keypress",
+  "scroll",
+  "touchstart",
+];
+
+// Fungsi yang akan dijalankan saat timer habis
+const logoutDueToInactivity = () => {
+  // Hentikan semua listener agar tidak berjalan setelah logout
+  stopInactivityDetection();
+  // Beri notifikasi kepada pengguna
+  alert(
+    "Anda telah keluar secara otomatis karena tidak ada aktivitas selama 30 menit."
+  );
+  // Panggil fungsi signOut dari store
+  financeStore.signOut();
+  // Arahkan ke halaman login
+  router.push("/auth/login");
 };
 
-watch(isSidebarOpen, (isOpen) => {
-  if (isOpen) {
-    document.body.classList.add("no-scroll");
-  } else {
-    document.body.classList.remove("no-scroll");
-  }
+// Fungsi untuk me-reset timer setiap kali ada aktivitas
+const resetInactivityTimer = () => {
+  // Hapus timer yang sedang berjalan
+  clearTimeout(inactivityTimer);
+  // Mulai timer baru
+  inactivityTimer = setTimeout(logoutDueToInactivity, INACTIVITY_TIMEOUT);
+};
+
+// Fungsi untuk mulai mendengarkan aktivitas pengguna
+const startInactivityDetection = () => {
+  activityEvents.forEach((event) => {
+    window.addEventListener(event, resetInactivityTimer);
+  });
+  // Reset timer saat pertama kali dimulai
+  resetInactivityTimer();
+};
+
+// Fungsi untuk berhenti mendengarkan aktivitas (saat logout manual atau sesi habis)
+const stopInactivityDetection = () => {
+  activityEvents.forEach((event) => {
+    window.removeEventListener(event, resetInactivityTimer);
+  });
+  // Hapus juga sisa timer yang mungkin ada
+  clearTimeout(inactivityTimer);
+};
+
+// Memantau status login pengguna
+watch(
+  () => financeStore.user,
+  (newUser) => {
+    if (newUser) {
+      // Jika pengguna login, mulai deteksi inaktivitas
+      startInactivityDetection();
+    } else {
+      // Jika pengguna logout, hentikan deteksi
+      stopInactivityDetection();
+    }
+  },
+  { immediate: true }
+);
+
+// Pastikan semua listener dihapus saat komponen utama dihancurkan
+onUnmounted(() => {
+  stopInactivityDetection();
 });
+
+// --- SISA LOGIKA ANDA (TIDAK BERUBAH) ---
+
+const isSidebarOpen = ref(false);
+const toggleSidebar = () => (isSidebarOpen.value = !isSidebarOpen.value);
+const closeSidebar = () => (isSidebarOpen.value = false);
+
+const isAuthPage = computed(() => {
+  const authRoutes = ["Auth", "ForgotPassword", "UpdatePassword"];
+  return authRoutes.includes(route.name);
+});
+
+watch(isSidebarOpen, (isOpen) => {
+  if (isOpen) document.body.classList.add("no-scroll");
+  else document.body.classList.remove("no-scroll");
+});
+
+watch(
+  () => route.path,
+  () => {
+    closeSidebar();
+    nextTick(() => feather.replace());
+  },
+  { immediate: true }
+);
 
 onMounted(() => {
   financeStore.handleAuthStateChange();
+  themeStore.loadTheme();
 });
 </script>
 
 <template>
-  <div v-if="financeStore.user" class="app-layout">
-    <MobileHeader @toggle-sidebar="toggleSidebar" />
-    <Sidebar :is-open="isSidebarOpen" @close-sidebar="toggleSidebar" />
+  <!-- Jika ini BUKAN halaman otentikasi DAN pengguna sudah login, tampilkan layout utama -->
+  <div v-if="!isAuthPage && financeStore.user" class="app-layout">
+    <header class="mobile-header no-print">
+      <h1 class="mobile-logo">Mapan</h1>
+      <button
+        @click="toggleSidebar"
+        class="hamburger-btn"
+        aria-label="Buka menu"
+      >
+        <i data-feather="menu"></i>
+      </button>
+    </header>
     <div
       v-if="isSidebarOpen"
+      @click="closeSidebar"
       class="sidebar-overlay"
-      @click="toggleSidebar"
     ></div>
+    <Sidebar :is-open="isSidebarOpen" @close-sidebar="closeSidebar" />
     <main class="main-content">
       <router-view />
     </main>
   </div>
 
+  <!-- Jika ini adalah halaman otentikasi ATAU pengguna belum login, tampilkan kontennya saja -->
   <div v-else>
     <router-view />
   </div>
@@ -48,33 +150,69 @@ onMounted(() => {
 .app-layout {
   display: flex;
   min-height: 100vh;
+  background-color: var(--background-color);
 }
-
 .main-content {
   flex-grow: 1;
-  padding: 32px;
   overflow-y: auto;
+  padding: 24px;
 }
-
-.sidebar-overlay {
+.mobile-header {
   display: none;
   position: fixed;
-  inset: 0;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 60px;
+  background-color: var(--surface-color);
+  border-bottom: 1px solid var(--border-color);
+  padding: 0 16px;
+  align-items: center;
+  justify-content: space-between;
+  z-index: 100;
+  transition: background-color 0.3s ease, border-color 0.3s ease;
+}
+.mobile-logo {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--primary-color);
+}
+.hamburger-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 8px;
+  color: var(--text-primary);
+  line-height: 1;
+}
+.sidebar-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
   background-color: rgba(0, 0, 0, 0.5);
-  z-index: 1000;
+  z-index: 998;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
   backdrop-filter: blur(2px);
 }
-
 @media (max-width: 768px) {
   .app-layout {
     flex-direction: column;
   }
   .main-content {
-    padding: 24px 16px;
-    padding-top: 80px;
+    padding-top: 84px;
+    padding-left: 16px;
+    padding-right: 16px;
   }
-  .sidebar-overlay {
-    display: block;
+  .mobile-header {
+    display: flex;
+  }
+  .is-open ~ .sidebar-overlay {
+    opacity: 1;
+    pointer-events: auto;
   }
 }
 </style>
