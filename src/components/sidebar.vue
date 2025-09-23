@@ -37,6 +37,7 @@ const navItems = [
   { name: "Target", path: "/goals", icon: "flag" },
   { name: "Anggaran", path: "/budgets", icon: "target" },
   { name: "Laporan", path: "/reports", icon: "bar-chart-2" },
+  { name: "Profil", path: "/profile", icon: "user" },
 ];
 
 const logout = async () => {
@@ -85,17 +86,6 @@ watch(
           >
             <i :data-feather="item.icon" class="nav-icon"></i>
             <span>{{ item.name }}</span>
-          </router-link>
-        </li>
-
-        <li>
-          <router-link
-            to="/profile"
-            class="nav-link"
-            @click="handleNavLinkClick"
-          >
-            <i data-feather="user" class="nav-icon"></i>
-            <span>Profil </span>
           </router-link>
         </li>
 

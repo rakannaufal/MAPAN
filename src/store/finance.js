@@ -206,8 +206,6 @@ export const useFinanceStore = defineStore("finance", () => {
     }
   }
 
-  // --- PERBAIKAN UTAMA DI SINI ---
-  // Mengubah computed property menjadi fungsi biasa agar bisa diekspor dan dipanggil
   const getCashFlowTrendByPeriod = (period) => {
     const now = new Date();
     let startDate = new Date();
@@ -302,6 +300,7 @@ export const useFinanceStore = defineStore("finance", () => {
   async function signOut() {
     await supabase.auth.signOut();
   }
+
   async function addTransaction(transaction) {
     const { data, error } = await supabase
       .from("transactions")
@@ -311,6 +310,7 @@ export const useFinanceStore = defineStore("finance", () => {
     if (error) throw error;
     transactions.value.unshift(data);
   }
+
   async function updateTransaction(id, updatedData) {
     const { id: txId, created_at, user_id, ...dataToUpdate } = updatedData;
     const { data, error } = await supabase
@@ -321,8 +321,11 @@ export const useFinanceStore = defineStore("finance", () => {
       .single();
     if (error) throw error;
     const index = transactions.value.findIndex((tx) => tx.id === id);
-    if (index !== -1) transactions.value[index] = data;
+    if (index !== -1) {
+      transactions.value[index] = data;
+    }
   }
+
   async function deleteTransaction(id) {
     const txToDelete = transactions.value.find((tx) => tx.id === id);
     if (!txToDelete) {
@@ -347,6 +350,7 @@ export const useFinanceStore = defineStore("finance", () => {
     if (error) throw error;
     transactions.value = transactions.value.filter((t) => t.id !== id);
   }
+
   async function addGoal(goal) {
     const { data, error } = await supabase
       .from("goals")
@@ -356,6 +360,7 @@ export const useFinanceStore = defineStore("finance", () => {
     if (error) throw error;
     goals.value.push(data);
   }
+
   async function updateGoal(id, updatedData) {
     const oldGoal = goals.value.find((g) => g.id === id);
     if (!oldGoal)
@@ -380,8 +385,11 @@ export const useFinanceStore = defineStore("finance", () => {
       await addTransaction(correctionTx);
     }
     const index = goals.value.findIndex((g) => g.id === id);
-    if (index !== -1) goals.value[index] = data;
+    if (index !== -1) {
+      goals.value[index] = data;
+    }
   }
+
   async function deleteGoal(id) {
     const goalToDelete = goals.value.find((g) => g.id === id);
     if (!goalToDelete) throw new Error("Target tidak ditemukan.");
@@ -401,6 +409,7 @@ export const useFinanceStore = defineStore("finance", () => {
       (tx) => tx.notes !== notePattern
     );
   }
+
   async function addFundsToGoal(goalId, amountToAdd) {
     if (!amountToAdd || amountToAdd <= 0)
       throw new Error("Jumlah harus lebih besar dari nol.");
@@ -426,8 +435,11 @@ export const useFinanceStore = defineStore("finance", () => {
       notes: `Menambah dana ke target: ${updatedGoal.name}`,
     });
     const index = goals.value.findIndex((g) => g.id === goalId);
-    if (index !== -1) goals.value[index] = updatedGoal;
+    if (index !== -1) {
+      goals.value[index] = updatedGoal;
+    }
   }
+
   async function fetchBudgetsForPeriod(period) {
     const { data, error: fetchError } = await supabase
       .from("budgets")
@@ -436,6 +448,7 @@ export const useFinanceStore = defineStore("finance", () => {
     if (fetchError) throw fetchError;
     budgets.value = data || [];
   }
+
   async function addOrUpdateBudget(budgetData) {
     const { data: result, error } = await supabase
       .from("budgets")
@@ -446,14 +459,19 @@ export const useFinanceStore = defineStore("finance", () => {
     const index = budgets.value.findIndex(
       (b) => b.period === result.period && b.category === result.category
     );
-    if (index !== -1) budgets.value[index] = result;
-    else budgets.value.push(result);
+    if (index !== -1) {
+      budgets.value[index] = result;
+    } else {
+      budgets.value.push(result);
+    }
   }
+
   async function deleteBudget(id) {
     const { error } = await supabase.from("budgets").delete().eq("id", id);
     if (error) throw error;
     budgets.value = budgets.value.filter((b) => b.id !== id);
   }
+
   async function copyBudgetsFromLastMonth(currentPeriod, lastPeriod) {
     const { data: lastMonthBudgets, error: fetchError } = await supabase
       .from("budgets")
@@ -478,6 +496,7 @@ export const useFinanceStore = defineStore("finance", () => {
     if (insertError) throw insertError;
     budgets.value = inserted;
   }
+
   async function updateUserProfile(newData) {
     const { error } = await supabase.auth.updateUser({
       data: { phone: newData.phone },
@@ -489,6 +508,9 @@ export const useFinanceStore = defineStore("finance", () => {
     user.value = session ? session.user : null;
   }
 
+  // =================================================================
+  // === EXPORTS (Semua yang bisa diakses dari luar) ===
+  // =================================================================
   return {
     user,
     transactions,
@@ -502,6 +524,7 @@ export const useFinanceStore = defineStore("finance", () => {
     netWorthTrend,
     processedBudgets,
     budgetSummary,
+    getCashFlowTrendByPeriod,
     handleAuthStateChange,
     fetchAllData,
     fetchAllTransactions,
@@ -518,6 +541,5 @@ export const useFinanceStore = defineStore("finance", () => {
     deleteBudget,
     copyBudgetsFromLastMonth,
     updateUserProfile,
-    getCashFlowTrendByPeriod, // <-- PASTIKAN FUNGSI INI DIEKSPOR
   };
 });

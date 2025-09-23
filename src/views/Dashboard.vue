@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onMounted, nextTick, ref, watch } from "vue";
 import { useFinanceStore } from "@/store/finance";
+import { useThemeStore } from "@/store/theme";
 import {
   Doughnut as DoughnutChart,
   Line as LineChart,
@@ -21,6 +22,7 @@ import {
 } from "chart.js";
 import feather from "feather-icons";
 
+// Daftarkan semua elemen Chart.js yang dibutuhkan
 Chart.register(
   Title,
   Tooltip,
@@ -35,7 +37,9 @@ Chart.register(
 );
 
 const financeStore = useFinanceStore();
+const themeStore = useThemeStore();
 
+// State untuk filter chart Pemasukan vs Pengeluaran
 const activeFilter = ref("6m");
 const filters = [
   { key: "7d", label: "7H" },
@@ -44,6 +48,8 @@ const filters = [
   { key: "1y", label: "1T" },
   { key: "5y", label: "5T" },
 ];
+
+// --- COMPUTED PROPERTIES ---
 
 const greeting = computed(() => {
   const hour = new Date().getHours();
@@ -106,49 +112,115 @@ const sortedActiveGoals = computed(() => {
     .sort((a, b) => b.progress - a.progress);
 });
 
+// Opsi chart reaktif terhadap tema
+const chartTextColor = computed(() =>
+  themeStore.theme === "dark" ? "#A0AEC0" : "#718096"
+);
+const chartGridColor = computed(() =>
+  themeStore.theme === "dark"
+    ? "rgba(74, 85, 104, 0.5)"
+    : "rgba(226, 232, 240, 0.8)"
+);
+const doughnutColors = computed(() => {
+  return themeStore.theme === "dark"
+    ? [
+        "#818CF8",
+        "#68D391",
+        "#FC8181",
+        "#F6E05E",
+        "#60A5FA",
+        "#C4B5FD",
+        "#FDBA74",
+      ]
+    : [
+        "#1A237E",
+        "#4CAF50",
+        "#EF5350",
+        "#FFC107",
+        "#2196F3",
+        "#9C27B0",
+        "#795548",
+      ];
+});
+const lineChartBorderColor = computed(() =>
+  themeStore.theme === "dark" ? "#818CF8" : "#1A237E"
+);
+const lineChartBgColor = computed(() =>
+  themeStore.theme === "dark"
+    ? "rgba(129, 140, 248, 0.1)"
+    : "rgba(26, 35, 126, 0.1)"
+);
+
 const doughnutChartData = computed(() => {
   const expenses = financeStore.expenseByCategory;
-  const labels = Object.keys(expenses);
-  const data = Object.values(expenses);
-  const colors = [
-    "#1A237E",
-    "#4CAF50",
-    "#EF5350",
-    "#FFC107",
-    "#2196F3",
-    "#9C27B0",
-    "#795548",
-  ];
   return {
-    labels,
-    datasets: [{ backgroundColor: colors.slice(0, labels.length), data }],
+    labels: Object.keys(expenses),
+    datasets: [
+      { backgroundColor: doughnutColors.value, data: Object.values(expenses) },
+    ],
   };
 });
-
-const lineChartData = computed(() => financeStore.netWorthTrend);
+const lineChartData = computed(() => {
+  const trend = financeStore.netWorthTrend;
+  if (trend.datasets[0]) {
+    trend.datasets[0].borderColor = lineChartBorderColor.value;
+    trend.datasets[0].backgroundColor = lineChartBgColor.value;
+  }
+  return trend;
+});
 const barChartData = computed(() =>
   financeStore.getCashFlowTrendByPeriod(activeFilter.value)
 );
 
-const chartOptions = {
+const chartOptions = computed(() => ({
   responsive: true,
   maintainAspectRatio: false,
-  plugins: { legend: { position: "bottom" } },
-};
-const lineChartOptions = {
+  plugins: {
+    legend: { position: "bottom", labels: { color: chartTextColor.value } },
+  },
+}));
+const lineChartOptions = computed(() => ({
   responsive: true,
   maintainAspectRatio: false,
   plugins: { legend: { display: false } },
-};
-const barChartOptions = {
+  scales: {
+    y: {
+      beginAtZero: false,
+      ticks: { color: chartTextColor.value },
+      grid: { color: chartGridColor.value },
+    },
+    x: {
+      ticks: { color: chartTextColor.value },
+      grid: { color: "transparent" },
+    },
+  },
+}));
+const barChartOptions = computed(() => ({
   responsive: true,
   maintainAspectRatio: false,
-  plugins: { legend: { position: "top" } },
-  scales: { y: { beginAtZero: true } },
-};
+  plugins: {
+    legend: { position: "top", labels: { color: chartTextColor.value } },
+  },
+  scales: {
+    y: {
+      beginAtZero: true,
+      ticks: { color: chartTextColor.value },
+      grid: { color: chartGridColor.value },
+    },
+    x: {
+      ticks: { color: chartTextColor.value },
+      grid: { color: "transparent" },
+    },
+  },
+}));
 
 watch(
-  () => [financeStore.loading, sortedActiveGoals.value, activeFilter.value],
+  () => [
+    financeStore.loading,
+    sortedActiveGoals.value,
+    activeFilter.value,
+    themeStore.theme,
+  ],
   (values) => {
     if (!values[0]) {
       nextTick(() => {
@@ -214,7 +286,7 @@ watch(
             <i data-feather="arrow-down-circle"></i>
           </div>
           <div class="text-content">
-            <h3>Pemasukan</h3>
+            <h3>Pemasukan Bulan Ini</h3>
             <p class="amount green">
               {{ formatCurrency(financeStore.currentMonthCashFlow.income) }}
             </p>
@@ -225,7 +297,7 @@ watch(
             <i data-feather="arrow-up-circle"></i>
           </div>
           <div class="text-content">
-            <h3>Pengeluaran</h3>
+            <h3>Pengeluaran Bulan Ini</h3>
             <p class="amount red">
               {{ formatCurrency(financeStore.currentMonthCashFlow.expense) }}
             </p>
@@ -305,7 +377,7 @@ watch(
           <h3>Tren Kekayaan Bersih</h3>
           <div class="chart-wrapper">
             <LineChart
-              v-if="lineChartData.labels.length"
+              v-if="lineChartData && lineChartData.labels.length"
               :data="lineChartData"
               :options="lineChartOptions"
             />
@@ -318,7 +390,7 @@ watch(
           <h3>Pengeluaran per Kategori</h3>
           <div class="chart-wrapper">
             <DoughnutChart
-              v-if="doughnutChartData.labels.length"
+              v-if="doughnutChartData && doughnutChartData.labels.length"
               :data="doughnutChartData"
               :options="chartOptions"
             />
@@ -368,28 +440,27 @@ watch(
 /* --- PERBAIKAN UTAMA DI SINI --- */
 .dashboard-grid {
   display: grid;
-  /* Paksa 2 kolom di semua ukuran layar */
   grid-template-columns: 1fr 1fr;
   gap: 16px;
 }
-
 .summary-card {
   display: flex;
-  flex-direction: column; /* Ubah arah flex menjadi kolom */
-  align-items: flex-start; /* Rata kiri */
-  gap: 12px;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: space-between; /* Membuat konten meregang */
+  gap: 8px;
   padding: 16px;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
+  min-height: 120px; /* Beri tinggi minimum agar seragam */
 }
 .summary-card:hover {
   transform: translateY(-4px);
   box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
 }
-
 .icon-wrapper {
   flex-shrink: 0;
-  width: 40px;
-  height: 40px;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -397,10 +468,9 @@ watch(
   color: white;
 }
 .icon-wrapper i {
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
 }
-
 .text-content {
   width: 100%;
   overflow: hidden;
@@ -419,18 +489,17 @@ watch(
   font-weight: 600;
   white-space: nowrap;
 }
-
-/* Aturan untuk layar yang lebih besar (tablet ke atas) untuk mengembalikan gaya semula */
 @media (min-width: 768px) {
   .dashboard-grid {
-    grid-template-columns: repeat(4, 1fr); /* 4 kolom di desktop */
+    grid-template-columns: repeat(4, 1fr);
     gap: 24px;
   }
   .summary-card {
-    flex-direction: row; /* Kembalikan ke baris */
+    flex-direction: row;
     align-items: center;
     gap: 20px;
     padding: 24px;
+    min-height: 0; /* Hapus tinggi minimum di desktop */
   }
   .icon-wrapper {
     width: 52px;
@@ -569,7 +638,7 @@ watch(
 .filter-pills {
   display: flex;
   gap: 8px;
-  background-color: #f3f4f6;
+  background-color: var(--background-color-light);
   padding: 4px;
   border-radius: 99px;
   flex-shrink: 0;
@@ -623,7 +692,13 @@ watch(
   align-items: center;
   gap: 20px;
   margin-bottom: 24px;
+  background-color: #ebf4ff;
+  border-color: #bee3f8;
   opacity: 0;
+}
+body.dark-theme .insight-card {
+  background-color: #2c3a57;
+  border-color: #384561;
 }
 .insight-card p {
   font-weight: 500;
