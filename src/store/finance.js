@@ -19,6 +19,7 @@ export const useFinanceStore = defineStore("finance", () => {
   // =================================================================
 
   const netWorth = computed(() => {
+    if (!transactions.value) return 0;
     return transactions.value.reduce(
       (acc, tx) =>
         tx.type === "Pemasukan" ? acc + tx.amount : acc - tx.amount,
@@ -27,6 +28,7 @@ export const useFinanceStore = defineStore("finance", () => {
   });
 
   const currentMonthCashFlow = computed(() => {
+    if (!transactions.value) return { income: 0, expense: 0 };
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     let income = 0;
@@ -41,6 +43,7 @@ export const useFinanceStore = defineStore("finance", () => {
   });
 
   const expenseByCategory = computed(() => {
+    if (!transactions.value) return {};
     const expenseMap = new Map();
     transactions.value
       .filter((tx) => tx.type === "Pengeluaran")
@@ -55,8 +58,20 @@ export const useFinanceStore = defineStore("finance", () => {
     return Object.fromEntries(expenseMap);
   });
 
+  const incomeByCategory = computed(() => {
+    if (!transactions.value) return {};
+    const incomeMap = new Map();
+    transactions.value
+      .filter((tx) => tx.type === "Pemasukan")
+      .forEach((tx) => {
+        const key = tx.category;
+        incomeMap.set(key, (incomeMap.get(key) || 0) + tx.amount);
+      });
+    return Object.fromEntries(incomeMap);
+  });
+
   const netWorthTrend = computed(() => {
-    if (transactions.value.length < 2)
+    if (!transactions.value || transactions.value.length < 2)
       return { labels: [], datasets: [{ data: [] }] };
     const sortedTxs = [...transactions.value].sort(
       (a, b) => new Date(a.transaction_at) - new Date(b.transaction_at)
@@ -88,7 +103,12 @@ export const useFinanceStore = defineStore("finance", () => {
   });
 
   const processedBudgets = computed(() => {
-    const period = budgets.value.length > 0 ? budgets.value[0].period : "";
+    if (!budgets.value || !transactions.value)
+      return { budgetItems: [], unbudgetedSpending: [] };
+    const period =
+      budgets.value.length > 0
+        ? budgets.value[0].period
+        : new Date().toISOString().slice(0, 7);
     const start = new Date(period);
     const end = new Date(start.getFullYear(), start.getMonth() + 1, 0);
     const actualSpending = transactions.value
@@ -101,6 +121,7 @@ export const useFinanceStore = defineStore("finance", () => {
         return acc;
       }, {});
     const budgetItems = budgets.value
+      .filter((b) => b.period === period)
       .map((budget) => {
         const spent = actualSpending[budget.category] || 0;
         return {
@@ -207,6 +228,7 @@ export const useFinanceStore = defineStore("finance", () => {
   }
 
   const getCashFlowTrendByPeriod = (period) => {
+    if (!transactions.value) return { labels: [], datasets: [] };
     const now = new Date();
     let startDate = new Date();
     let timeUnit;
@@ -321,9 +343,7 @@ export const useFinanceStore = defineStore("finance", () => {
       .single();
     if (error) throw error;
     const index = transactions.value.findIndex((tx) => tx.id === id);
-    if (index !== -1) {
-      transactions.value[index] = data;
-    }
+    if (index !== -1) transactions.value[index] = data;
   }
 
   async function deleteTransaction(id) {
@@ -385,9 +405,7 @@ export const useFinanceStore = defineStore("finance", () => {
       await addTransaction(correctionTx);
     }
     const index = goals.value.findIndex((g) => g.id === id);
-    if (index !== -1) {
-      goals.value[index] = data;
-    }
+    if (index !== -1) goals.value[index] = data;
   }
 
   async function deleteGoal(id) {
@@ -435,9 +453,7 @@ export const useFinanceStore = defineStore("finance", () => {
       notes: `Menambah dana ke target: ${updatedGoal.name}`,
     });
     const index = goals.value.findIndex((g) => g.id === goalId);
-    if (index !== -1) {
-      goals.value[index] = updatedGoal;
-    }
+    if (index !== -1) goals.value[index] = updatedGoal;
   }
 
   async function fetchBudgetsForPeriod(period) {
@@ -459,11 +475,8 @@ export const useFinanceStore = defineStore("finance", () => {
     const index = budgets.value.findIndex(
       (b) => b.period === result.period && b.category === result.category
     );
-    if (index !== -1) {
-      budgets.value[index] = result;
-    } else {
-      budgets.value.push(result);
-    }
+    if (index !== -1) budgets.value[index] = result;
+    else budgets.value.push(result);
   }
 
   async function deleteBudget(id) {
@@ -498,9 +511,12 @@ export const useFinanceStore = defineStore("finance", () => {
   }
 
   async function updateUserProfile(newData) {
-    const { error } = await supabase.auth.updateUser({
-      data: { phone: newData.phone },
-    });
+    const updateData = {};
+    if (newData.phone)
+      updateData.data = { ...user.value.user_metadata, phone: newData.phone };
+    if (newData.password) updateData.password = newData.password;
+    if (Object.keys(updateData).length === 0) return;
+    const { error } = await supabase.auth.updateUser(updateData);
     if (error) throw error;
     const {
       data: { session },
@@ -508,9 +524,6 @@ export const useFinanceStore = defineStore("finance", () => {
     user.value = session ? session.user : null;
   }
 
-  // =================================================================
-  // === EXPORTS (Semua yang bisa diakses dari luar) ===
-  // =================================================================
   return {
     user,
     transactions,
@@ -521,10 +534,10 @@ export const useFinanceStore = defineStore("finance", () => {
     netWorth,
     currentMonthCashFlow,
     expenseByCategory,
+    incomeByCategory,
     netWorthTrend,
     processedBudgets,
     budgetSummary,
-    getCashFlowTrendByPeriod,
     handleAuthStateChange,
     fetchAllData,
     fetchAllTransactions,
@@ -541,5 +554,6 @@ export const useFinanceStore = defineStore("finance", () => {
     deleteBudget,
     copyBudgetsFromLastMonth,
     updateUserProfile,
+    getCashFlowTrendByPeriod,
   };
 });

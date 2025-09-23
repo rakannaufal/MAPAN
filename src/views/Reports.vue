@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed, watch, nextTick } from "vue";
 import { useFinanceStore } from "@/store/finance";
+import { useThemeStore } from "@/store/theme";
 import { Doughnut as DoughnutChart } from "vue-chartjs";
 import {
   Chart,
@@ -25,8 +26,9 @@ Chart.register(
 );
 
 const financeStore = useFinanceStore();
+const themeStore = useThemeStore();
 
-// --- STATE LOKAL: Mengadopsi logika dari halaman Anggaran ---
+// --- STATE LOKAL ---
 const viewMode = ref("monthly");
 const now = new Date();
 const currentMonth = ref(
@@ -40,7 +42,7 @@ const activePeriod = computed(() => {
     : String(currentYear.value);
 });
 
-// --- COMPUTED PROPERTIES: Logika pemrosesan data untuk Laporan ---
+// --- COMPUTED PROPERTIES ---
 const filteredData = computed(() => {
   const start = new Date(
     viewMode.value === "monthly"
@@ -50,16 +52,15 @@ const filteredData = computed(() => {
   const end = new Date(start);
 
   if (viewMode.value === "monthly") {
-    end.setMonth(end.getMonth() + 1);
-    end.setDate(0);
+    end.setMonth(end.getMonth() + 1, 0);
   } else {
-    end.setFullYear(end.getFullYear() + 1);
-    end.setDate(0);
+    end.setFullYear(end.getFullYear() + 1, 0);
   }
   end.setHours(23, 59, 59, 999);
 
   const transactions = financeStore.transactions.filter((tx) => {
-    const txDate = new Date(tx.transaction_at); // <-- PERBAIKAN
+    // --- PERBAIKAN UTAMA: Menggunakan `transaction_at` ---
+    const txDate = new Date(tx.transaction_at);
     return txDate >= start && txDate <= end;
   });
 
@@ -102,6 +103,37 @@ const processedReportBudgets = computed(() => {
     .sort((a, b) => b.percentage - a.percentage);
 });
 
+// Opsi chart reaktif terhadap tema
+const chartTextColor = computed(() =>
+  themeStore.theme === "dark" ? "#A0AEC0" : "#718096"
+);
+const doughnutExpenseColors = computed(() => {
+  return themeStore.theme === "dark"
+    ? [
+        "#818CF8",
+        "#F6E05E",
+        "#FC8181",
+        "#FDBA74",
+        "#60A5FA",
+        "#C4B5FD",
+        "#9AE6B4",
+      ]
+    : [
+        "#1A237E",
+        "#ECC94B",
+        "#EF5350",
+        "#ED8936",
+        "#2196F3",
+        "#9C27B0",
+        "#48BB78",
+      ];
+});
+const doughnutIncomeColors = computed(() => {
+  return themeStore.theme === "dark"
+    ? ["#68D391", "#4FD1C5", "#63B3ED", "#B794F4", "#F6AD55"]
+    : ["#2F855A", "#38B2AC", "#3182CE", "#805AD5", "#D69E2E"];
+});
+
 const expenseChartData = computed(() => {
   const expenseMap = new Map();
   filteredData.value.transactions
@@ -116,20 +148,35 @@ const expenseChartData = computed(() => {
     });
   const labels = Array.from(expenseMap.keys());
   const data = Array.from(expenseMap.values());
-  const colors = [
-    "#1A237E",
-    "#48BB78",
-    "#F56565",
-    "#F6AD55",
-    "#4299E1",
-    "#9F7AEA",
-    "#ED8936",
-  ];
   return {
     labels,
-    datasets: [{ backgroundColor: colors.slice(0, labels.length), data }],
+    datasets: [{ backgroundColor: doughnutExpenseColors.value, data }],
   };
 });
+
+// --- CHART BARU UNTUK PEMASUKAN ---
+const incomeChartData = computed(() => {
+  const incomeMap = new Map();
+  filteredData.value.transactions
+    .filter((tx) => tx.type === "Pemasukan")
+    .forEach((tx) => {
+      incomeMap.set(tx.category, (incomeMap.get(tx.category) || 0) + tx.amount);
+    });
+  const labels = Array.from(incomeMap.keys());
+  const data = Array.from(incomeMap.values());
+  return {
+    labels,
+    datasets: [{ backgroundColor: doughnutIncomeColors.value, data }],
+  };
+});
+
+const chartOptions = computed(() => ({
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: {
+    legend: { position: "bottom", labels: { color: chartTextColor.value } },
+  },
+}));
 
 const displayPeriod = computed(() => {
   if (viewMode.value === "monthly") {
@@ -154,6 +201,7 @@ const changePeriod = (direction) => {
     currentYear.value += direction;
   }
 };
+
 const handlePrint = () => {
   window.print();
 };
@@ -172,7 +220,7 @@ watch(
   { immediate: true }
 );
 watch(
-  () => [filteredData.value, financeStore.goals],
+  () => [filteredData.value, financeStore.goals, themeStore.theme],
   () => {
     nextTick(() => {
       feather.replace();
@@ -285,18 +333,29 @@ watch(
         </div>
         <p v-else class="no-data">Tidak ada data anggaran untuk periode ini.</p>
       </section>
-      <section class="report-section chart-section">
-        <div class="chart-container">
-          <h3 class="section-title">Komposisi Pengeluaran</h3>
-          <div class="chart-wrapper">
-            <DoughnutChart
-              v-if="expenseChartData.labels.length"
-              :data="expenseChartData"
-              :options="{ responsive: true, maintainAspectRatio: false }"
-            />
-            <p v-else class="no-data">
-              Tidak ada data pengeluaran pada periode ini.
-            </p>
+      <section class="report-section">
+        <div class="chart-grid-double">
+          <div class="chart-container">
+            <h3 class="section-title">Pemasukan</h3>
+            <div class="chart-wrapper">
+              <DoughnutChart
+                v-if="incomeChartData.labels.length"
+                :data="incomeChartData"
+                :options="chartOptions"
+              />
+              <p v-else class="no-data">Tidak ada data pemasukan.</p>
+            </div>
+          </div>
+          <div class="chart-container">
+            <h3 class="section-title">Pengeluaran</h3>
+            <div class="chart-wrapper">
+              <DoughnutChart
+                v-if="expenseChartData.labels.length"
+                :data="expenseChartData"
+                :options="chartOptions"
+              />
+              <p v-else class="no-data">Tidak ada data pengeluaran.</p>
+            </div>
           </div>
         </div>
       </section>
@@ -610,6 +669,16 @@ watch(
 }
 .progress-bar.over {
   background-color: var(--accent-red);
+}
+.chart-grid-double {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 32px;
+}
+@media (min-width: 768px) {
+  .chart-grid-double {
+    grid-template-columns: 1fr 1fr;
+  }
 }
 @media print {
   .no-print,

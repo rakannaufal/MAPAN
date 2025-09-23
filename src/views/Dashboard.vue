@@ -121,26 +121,31 @@ const chartGridColor = computed(() =>
     ? "rgba(74, 85, 104, 0.5)"
     : "rgba(226, 232, 240, 0.8)"
 );
-const doughnutColors = computed(() => {
+const doughnutExpenseColors = computed(() => {
   return themeStore.theme === "dark"
     ? [
         "#818CF8",
-        "#68D391",
-        "#FC8181",
         "#F6E05E",
+        "#FC8181",
+        "#FDBA74",
         "#60A5FA",
         "#C4B5FD",
-        "#FDBA74",
+        "#9AE6B4",
       ]
     : [
         "#1A237E",
-        "#4CAF50",
+        "#ECC94B",
         "#EF5350",
-        "#FFC107",
+        "#ED8936",
         "#2196F3",
         "#9C27B0",
-        "#795548",
+        "#48BB78",
       ];
+});
+const doughnutIncomeColors = computed(() => {
+  return themeStore.theme === "dark"
+    ? ["#68D391", "#4FD1C5", "#63B3ED", "#B794F4", "#F6AD55"]
+    : ["#2F855A", "#38B2AC", "#3182CE", "#805AD5", "#D69E2E"];
 });
 const lineChartBorderColor = computed(() =>
   themeStore.theme === "dark" ? "#818CF8" : "#1A237E"
@@ -151,18 +156,35 @@ const lineChartBgColor = computed(() =>
     : "rgba(26, 35, 126, 0.1)"
 );
 
-const doughnutChartData = computed(() => {
+const expenseChartData = computed(() => {
   const expenses = financeStore.expenseByCategory;
+  if (!expenses) return { labels: [], datasets: [] };
   return {
     labels: Object.keys(expenses),
     datasets: [
-      { backgroundColor: doughnutColors.value, data: Object.values(expenses) },
+      {
+        backgroundColor: doughnutExpenseColors.value,
+        data: Object.values(expenses),
+      },
+    ],
+  };
+});
+const incomeChartData = computed(() => {
+  const incomes = financeStore.incomeByCategory;
+  if (!incomes) return { labels: [], datasets: [] };
+  return {
+    labels: Object.keys(incomes),
+    datasets: [
+      {
+        backgroundColor: doughnutIncomeColors.value,
+        data: Object.values(incomes),
+      },
     ],
   };
 });
 const lineChartData = computed(() => {
   const trend = financeStore.netWorthTrend;
-  if (trend.datasets[0]) {
+  if (trend && trend.datasets[0]) {
     trend.datasets[0].borderColor = lineChartBorderColor.value;
     trend.datasets[0].backgroundColor = lineChartBgColor.value;
   }
@@ -249,10 +271,11 @@ watch(
       <div class="dashboard-grid">
         <div v-for="n in 4" :key="n" class="card summary-card skeleton"></div>
       </div>
-      <div
-        class="card chart-card skeleton"
-        style="height: 480px; margin-top: 24px"
-      ></div>
+      <div class="chart-grid">
+        <div class="card chart-card skeleton main-chart"></div>
+        <div class="card chart-card skeleton"></div>
+        <div class="card chart-card skeleton"></div>
+      </div>
     </div>
 
     <div v-else>
@@ -262,7 +285,6 @@ watch(
         </div>
         <p v-html="keyInsight.message"></p>
       </div>
-
       <div class="dashboard-grid">
         <div class="card summary-card fade-in" style="animation-delay: 100ms">
           <div class="icon-wrapper bg-gradient-blue">
@@ -308,7 +330,7 @@ watch(
             <i data-feather="shield"></i>
           </div>
           <div class="text-content">
-            <h3>Sisa Anggaran Bulan Ini</h3>
+            <h3>Sisa Anggaran</h3>
             <p
               class="amount"
               :class="{
@@ -321,7 +343,6 @@ watch(
           </div>
         </div>
       </div>
-
       <div class="section-container fade-in" style="animation-delay: 500ms">
         <h3 class="section-title">Progres Target Aktif</h3>
         <div v-if="sortedActiveGoals.length > 0" class="goals-slider-container">
@@ -351,8 +372,11 @@ watch(
         </p>
       </div>
 
-      <div class="chart-main-container">
-        <div class="card chart-card fade-in" style="animation-delay: 600ms">
+      <div class="chart-grid">
+        <div
+          class="card chart-card fade-in main-chart"
+          style="animation-delay: 600ms"
+        >
           <div class="chart-header">
             <h3>Pemasukan vs Pengeluaran</h3>
             <div class="filter-pills">
@@ -367,17 +391,22 @@ watch(
             </div>
           </div>
           <div class="chart-wrapper-large">
-            <BarChart :data="barChartData" :options="barChartOptions" />
+            <BarChart
+              v-if="barChartData && barChartData.labels"
+              :data="barChartData"
+              :options="barChartOptions"
+            />
           </div>
         </div>
-      </div>
-
-      <div class="chart-grid">
         <div class="card chart-card fade-in" style="animation-delay: 700ms">
           <h3>Tren Kekayaan Bersih</h3>
           <div class="chart-wrapper">
             <LineChart
-              v-if="lineChartData && lineChartData.labels.length"
+              v-if="
+                lineChartData &&
+                lineChartData.labels &&
+                lineChartData.labels.length > 0
+              "
               :data="lineChartData"
               :options="lineChartOptions"
             />
@@ -387,11 +416,30 @@ watch(
           </div>
         </div>
         <div class="card chart-card fade-in" style="animation-delay: 800ms">
+          <h3>Pemasukan per Kategori</h3>
+          <div class="chart-wrapper">
+            <DoughnutChart
+              v-if="
+                incomeChartData &&
+                incomeChartData.labels &&
+                incomeChartData.labels.length > 0
+              "
+              :data="incomeChartData"
+              :options="chartOptions"
+            />
+            <p v-else class="no-data">Belum ada data pemasukan.</p>
+          </div>
+        </div>
+        <div class="card chart-card fade-in" style="animation-delay: 900ms">
           <h3>Pengeluaran per Kategori</h3>
           <div class="chart-wrapper">
             <DoughnutChart
-              v-if="doughnutChartData && doughnutChartData.labels.length"
-              :data="doughnutChartData"
+              v-if="
+                expenseChartData &&
+                expenseChartData.labels &&
+                expenseChartData.labels.length > 0
+              "
+              :data="expenseChartData"
               :options="chartOptions"
             />
             <p v-else class="no-data">Belum ada data pengeluaran.</p>
@@ -445,9 +493,11 @@ watch(
   display: flex;
   flex-direction: column;
   align-items: flex-start;
+  justify-content: space-between;
   gap: 8px;
   padding: 16px;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
+  min-height: 120px;
 }
 .summary-card:hover {
   transform: translateY(-4px);
@@ -495,6 +545,7 @@ watch(
     align-items: center;
     gap: 20px;
     padding: 24px;
+    min-height: 0;
   }
   .icon-wrapper {
     width: 52px;
@@ -612,8 +663,35 @@ watch(
   color: var(--text-secondary);
   margin-top: 16px;
 }
-.chart-main-container {
+.chart-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 24px;
   margin-top: 24px;
+}
+.main-chart {
+  grid-column: 1 / -1;
+}
+@media (min-width: 1024px) {
+  .chart-grid {
+    grid-template-columns: repeat(3, 1fr);
+    grid-template-rows: auto;
+    grid-template-areas:
+      "main main main"
+      "line income expense";
+  }
+  .main-chart {
+    grid-area: main;
+  }
+  .chart-card:nth-child(2) {
+    grid-area: line;
+  }
+  .chart-card:nth-child(3) {
+    grid-area: income;
+  }
+  .chart-card:nth-child(4) {
+    grid-area: expense;
+  }
 }
 .chart-header {
   display: flex;
@@ -656,16 +734,12 @@ watch(
   position: relative;
   height: 400px;
 }
-.chart-grid {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 24px;
-  margin-top: 24px;
+.chart-card {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
-@media (min-width: 768px) {
-  .chart-grid {
-    grid-template-columns: 1fr 1fr;
-  }
+.chart-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
 }
 .chart-card h3 {
   font-size: 18px;
