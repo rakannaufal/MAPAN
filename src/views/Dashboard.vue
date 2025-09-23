@@ -40,7 +40,7 @@ const financeStore = useFinanceStore();
 const themeStore = useThemeStore();
 
 // State untuk filter chart Pemasukan vs Pengeluaran
-const activeFilter = ref("6m");
+const activeFilter = ref("7d");
 const filters = [
   { key: "7d", label: "7H" },
   { key: "1m", label: "1B" },
