@@ -3,7 +3,7 @@ import { ref, watch, nextTick, computed, onMounted, onUnmounted } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useFinanceStore } from "@/store/finance";
 import { useThemeStore } from "@/store/theme";
-import Sidebar from "@/components/Sidebar.vue";
+import Sidebar from "@/components/sidebar.vue";
 import feather from "feather-icons";
 
 const financeStore = useFinanceStore();
@@ -28,7 +28,7 @@ const logoutDueToInactivity = () => {
     "Anda telah keluar secara otomatis karena tidak ada aktivitas selama 30 menit."
   );
   financeStore.signOut();
-  router.push("/auth/login");
+  router.push("/auth");
 };
 
 const resetInactivityTimer = () => {

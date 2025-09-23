@@ -16,7 +16,7 @@ const financeStore = useFinanceStore();
 const themeStore = useThemeStore();
 const router = useRouter();
 
-const appVersion = "1.1.0";
+const appVersion = "1.1.1";
 
 const currentLogo = computed(() => {
   return themeStore.theme === "light" ? logoDark : logoLight;
