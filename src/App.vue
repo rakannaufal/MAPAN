@@ -106,7 +106,7 @@ onMounted(() => {
   <!-- Jika ini BUKAN halaman otentikasi DAN pengguna sudah login, tampilkan layout utama -->
   <div v-if="!isAuthPage && financeStore.user" class="app-layout">
     <header class="mobile-header no-print">
-      <h1 class="mobile-logo">Mapan</h1>
+      <h1 class="mobile-logo">Wimpi</h1>
       <button
         @click="toggleSidebar"
         class="hamburger-btn"

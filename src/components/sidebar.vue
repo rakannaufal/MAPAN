@@ -42,7 +42,7 @@ const navItems = [
 
 const logout = async () => {
   await financeStore.signOut();
-  router.push("/auth/login");
+  router.push("/auth");
 };
 
 const handleNavLinkClick = () => {
@@ -122,7 +122,7 @@ watch(
         </li>
       </ul>
 
-      <div class="app-version">Mapan v{{ appVersion }}</div>
+      <div class="app-version">Wimpi v{{ appVersion }}</div>
     </nav>
   </aside>
 </template>

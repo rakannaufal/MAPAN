@@ -1,232 +1,3 @@
-<template>
-  <div class="page-container">
-    <div class="page-header">
-      <h1 class="page-title">Anggaran</h1>
-      <button class="button button-primary" @click="handleAddNew">
-        <i data-feather="plus" style="margin-right: 8px; width: 18px"></i>
-        <span>Tambah Anggaran</span>
-      </button>
-    </div>
-
-    <div v-if="showForm" class="card form-card fade-in">
-      <form @submit.prevent="handleSubmit">
-        <h3 class="form-title">
-          {{ editingBudget ? "Edit Anggaran" : "Anggaran Baru" }}
-        </h3>
-        <div class="form-grid">
-          <div class="form-group">
-            <label>Kategori</label>
-            <select
-              v-model="formBudget.category"
-              class="form-select"
-              required
-              :disabled="!!editingBudget"
-            >
-              <option disabled value="">Pilih Kategori</option>
-              <option v-for="cat in expenseCategories" :key="cat" :value="cat">
-                {{ cat }}
-              </option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label>Jumlah Anggaran (Rp)</label>
-            <input
-              v-model="formattedAmount"
-              type="text"
-              inputmode="numeric"
-              placeholder="0"
-              required
-              class="form-input text-right"
-            />
-          </div>
-          <div
-            v-if="showNewCategoryInput"
-            class="form-group full-width fade-in"
-          >
-            <label>Nama Kategori Baru</label>
-            <input
-              v-model="newCategoryName"
-              type="text"
-              placeholder="Contoh: Dana Darurat"
-              class="form-input"
-              required
-            />
-          </div>
-        </div>
-        <div class="form-actions">
-          <button
-            type="button"
-            class="button button-secondary"
-            @click="resetForm"
-          >
-            Batal
-          </button>
-          <button type="submit" class="button button-primary">
-            {{ editingBudget ? "Perbarui" : "Simpan" }}
-          </button>
-        </div>
-      </form>
-    </div>
-
-    <div class="card period-controls">
-      <div class="view-switcher">
-        <button
-          :class="{ active: viewMode === 'monthly' }"
-          @click="viewMode = 'monthly'"
-        >
-          Bulanan
-        </button>
-        <button
-          :class="{ active: viewMode === 'yearly' }"
-          @click="viewMode = 'yearly'"
-        >
-          Tahunan
-        </button>
-      </div>
-      <div class="period-navigation">
-        <button class="nav-btn" @click="changePeriod(-1)">
-          <i data-feather="chevron-left"></i>
-        </button>
-        <span class="period-display">{{ displayPeriod }}</span>
-        <button class="nav-btn" @click="changePeriod(1)">
-          <i data-feather="chevron-right"></i>
-        </button>
-      </div>
-      <button
-        v-if="viewMode === 'monthly'"
-        class="button button-secondary copy-btn"
-        @click="handleCopyFromLastMonth"
-        title="Salin dari bulan lalu"
-      >
-        <i data-feather="copy" class="icon-sm"></i>
-        <span class="desktop-only">Salin</span>
-      </button>
-    </div>
-
-    <div class="main-layout">
-      <div class="main-content">
-        <div v-if="financeStore.loading" class="skeleton-loader-container">
-          <div v-for="n in 3" :key="n" class="card skeleton-card"></div>
-        </div>
-        <div
-          v-else-if="budgetData.budgetItems.length === 0"
-          class="card empty-state"
-        >
-          <i data-feather="archive" class="empty-icon"></i>
-          <h3>Belum Ada Anggaran</h3>
-          <p>
-            Buat anggaran baru untuk periode ini atau salin dari bulan
-            sebelumnya.
-          </p>
-        </div>
-        <div v-else class="budget-list">
-          <div
-            v-for="item in budgetData.budgetItems"
-            :key="item.id"
-            class="card budget-card"
-          >
-            <div class="card-header">
-              <div class="category-info">
-                <div class="icon-wrapper">
-                  <i
-                    :data-feather="categoryIcons[item.category] || 'archive'"
-                  ></i>
-                </div>
-                <h4>{{ item.category }}</h4>
-              </div>
-              <div class="action-menu">
-                <button @click="startEdit(item)">
-                  <i data-feather="edit-2"></i>
-                </button>
-                <button @click="handleDelete(item.id)" class="delete-btn">
-                  <i data-feather="trash"></i>
-                </button>
-              </div>
-            </div>
-            <div class="progress-bar-container">
-              <div
-                class="progress-bar"
-                :style="{ width: item.progress + '%' }"
-                :class="{
-                  over: item.progress > 100,
-                  warn: item.progress > 80 && item.progress <= 100,
-                }"
-              ></div>
-            </div>
-            <div class="amount-details">
-              <span class="spent-amount">{{ formatCurrency(item.spent) }}</span>
-              <span class="budget-amount"
-                >/ {{ formatCurrency(item.amount) }}</span
-              >
-            </div>
-            <p
-              class="remaining-amount"
-              :class="{ red: item.remaining < 0, green: item.remaining >= 0 }"
-            >
-              Sisa: {{ formatCurrency(item.remaining) }}
-            </p>
-          </div>
-        </div>
-      </div>
-
-      <aside class="sidebar">
-        <div class="card sticky-card">
-          <h3 class="sidebar-title">Ringkasan</h3>
-          <div class="summary-item">
-            <span>Total Anggaran</span>
-            <strong>{{ formatCurrency(summary.totalBudget) }}</strong>
-          </div>
-          <div class="summary-item">
-            <span>Total Pengeluaran</span>
-            <strong class="red">{{
-              formatCurrency(summary.totalSpent)
-            }}</strong>
-          </div>
-          <hr />
-          <div class="summary-item total">
-            <span>Sisa Keseluruhan</span>
-            <strong
-              :class="{
-                green: summary.totalRemaining >= 0,
-                red: summary.totalRemaining < 0,
-              }"
-            >
-              {{ formatCurrency(summary.totalRemaining) }}
-            </strong>
-          </div>
-        </div>
-
-        <div
-          v-if="
-            !financeStore.loading && budgetData.unbudgetedSpending.length > 0
-          "
-          class="card sticky-card"
-        >
-          <h3 class="sidebar-title">Di Luar Anggaran</h3>
-          <ul>
-            <li
-              v-for="item in budgetData.unbudgetedSpending"
-              :key="item.category"
-              class="unbudgeted-item"
-            >
-              <span>{{ item.category }}</span>
-              <div class="unbudgeted-actions">
-                <span class="red">{{ formatCurrency(item.spent) }}</span>
-                <button
-                  @click="createBudgetFromUnbudgeted(item.category)"
-                  title="Buat Anggaran"
-                  class="add-budget-btn"
-                >
-                  <i data-feather="plus-circle"></i>
-                </button>
-              </div>
-            </li>
-          </ul>
-        </div>
-      </aside>
-    </div>
-  </div>
-</template>
 <script setup>
 import { ref, computed, watch, nextTick } from "vue";
 import { useFinanceStore } from "@/store/finance";
@@ -437,6 +208,243 @@ watch(
   { deep: true, immediate: true }
 );
 </script>
+
+<template>
+  <div class="page-container">
+    <div class="page-header">
+      <h1 class="page-title">Anggaran</h1>
+      <button class="button button-primary" @click="handleAddNew">
+        <i data-feather="plus" style="margin-right: 8px; width: 18px"></i>
+        <span>Tambah Anggaran</span>
+      </button>
+    </div>
+
+    <div v-if="showForm" class="card form-card fade-in">
+      <form @submit.prevent="handleSubmit">
+        <h3 class="form-title">
+          {{ editingBudget ? "Edit Anggaran" : "Anggaran Baru" }}
+        </h3>
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Kategori</label>
+            <select
+              v-model="formBudget.category"
+              class="form-select"
+              required
+              :disabled="!!editingBudget"
+            >
+              <option disabled value="">Pilih Kategori</option>
+              <option v-for="cat in expenseCategories" :key="cat" :value="cat">
+                {{ cat }}
+              </option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Jumlah Anggaran (Rp)</label>
+            <input
+              v-model="formattedAmount"
+              type="text"
+              inputmode="numeric"
+              placeholder="0"
+              required
+              class="form-input text-right"
+            />
+          </div>
+          <div
+            v-if="showNewCategoryInput"
+            class="form-group full-width fade-in"
+          >
+            <label>Nama Kategori Baru</label>
+            <input
+              v-model="newCategoryName"
+              type="text"
+              placeholder="Contoh: Dana Darurat"
+              class="form-input"
+              required
+            />
+          </div>
+        </div>
+        <div class="form-actions">
+          <button
+            type="button"
+            class="button button-secondary"
+            @click="resetForm"
+          >
+            Batal
+          </button>
+          <button type="submit" class="button button-primary">
+            {{ editingBudget ? "Perbarui" : "Simpan" }}
+          </button>
+        </div>
+      </form>
+    </div>
+
+    <div class="card period-controls">
+      <div class="view-switcher">
+        <button
+          :class="{ active: viewMode === 'monthly' }"
+          @click="viewMode = 'monthly'"
+        >
+          Bulanan
+        </button>
+        <button
+          :class="{ active: viewMode === 'yearly' }"
+          @click="viewMode = 'yearly'"
+        >
+          Tahunan
+        </button>
+      </div>
+      <div class="period-navigation">
+        <button class="nav-btn" @click="changePeriod(-1)">
+          <i data-feather="chevron-left"></i>
+        </button>
+        <span class="period-display">{{ displayPeriod }}</span>
+        <button class="nav-btn" @click="changePeriod(1)">
+          <i data-feather="chevron-right"></i>
+        </button>
+      </div>
+      <button
+        v-if="viewMode === 'monthly'"
+        class="button button-secondary copy-btn"
+        @click="handleCopyFromLastMonth"
+        title="Salin dari bulan lalu"
+      >
+        <i data-feather="copy" class="icon-sm"></i>
+        <span class="desktop-only">Salin</span>
+      </button>
+    </div>
+
+    <div class="main-layout">
+      <div class="main-content">
+        <div v-if="financeStore.loading" class="skeleton-loader-container">
+          <div v-for="n in 3" :key="n" class="card skeleton-card"></div>
+        </div>
+        <div
+          v-else-if="budgetData.budgetItems.length === 0"
+          class="card empty-state"
+        >
+          <i data-feather="archive" class="empty-icon"></i>
+          <h3>Belum Ada Anggaran</h3>
+          <p>
+            Buat anggaran baru untuk periode ini atau salin dari bulan
+            sebelumnya.
+          </p>
+        </div>
+        <div v-else class="budget-list">
+          <div
+            v-for="item in budgetData.budgetItems"
+            :key="item.id"
+            class="card budget-card"
+          >
+            <div class="card-header">
+              <div class="category-info">
+                <div class="icon-wrapper">
+                  <i
+                    :data-feather="categoryIcons[item.category] || 'archive'"
+                  ></i>
+                </div>
+                <h4>{{ item.category }}</h4>
+              </div>
+              <div class="action-menu">
+                <button @click="startEdit(item)">
+                  <i data-feather="edit-2"></i>
+                </button>
+                <button @click="handleDelete(item.id)" class="delete-btn">
+                  <i data-feather="trash"></i>
+                </button>
+              </div>
+            </div>
+            <div class="progress-bar-container">
+              <div
+                class="progress-bar"
+                :style="{ width: Math.min(item.percentage, 100) + '%' }"
+                :class="{
+                  over: item.percentage > 100,
+                  warn: item.percentage > 80 && item.percentage <= 100,
+                }"
+              ></div>
+            </div>
+            <div class="amount-details">
+              <span class="spent-amount">{{ formatCurrency(item.spent) }}</span>
+              <span class="budget-amount"
+                >/ {{ formatCurrency(item.amount) }}</span
+              >
+            </div>
+            <!-- --- PERBAIKAN UTAMA DI SINI --- -->
+            <p
+              class="remaining-amount"
+              :class="{ red: item.remaining < 0, green: item.remaining >= 0 }"
+            >
+              <span v-if="item.remaining >= 0"
+                >Sisa: {{ formatCurrency(item.remaining) }}</span
+              >
+              <span v-else
+                >Kelebihan: {{ formatCurrency(Math.abs(item.remaining)) }}</span
+              >
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <aside class="sidebar">
+        <div class="card sticky-card">
+          <h3 class="sidebar-title">Ringkasan</h3>
+          <div class="summary-item">
+            <span>Total Anggaran</span>
+            <strong>{{ formatCurrency(summary.totalBudget) }}</strong>
+          </div>
+          <div class="summary-item">
+            <span>Total Pengeluaran</span>
+            <strong class="red">{{
+              formatCurrency(summary.totalSpent)
+            }}</strong>
+          </div>
+          <hr />
+          <div class="summary-item total">
+            <span>Sisa Keseluruhan</span>
+            <strong
+              :class="{
+                green: summary.totalRemaining >= 0,
+                red: summary.totalRemaining < 0,
+              }"
+            >
+              {{ formatCurrency(summary.totalRemaining) }}
+            </strong>
+          </div>
+        </div>
+
+        <div
+          v-if="
+            !financeStore.loading && budgetData.unbudgetedSpending.length > 0
+          "
+          class="card sticky-card"
+        >
+          <h3 class="sidebar-title">Di Luar Anggaran</h3>
+          <ul>
+            <li
+              v-for="item in budgetData.unbudgetedSpending"
+              :key="item.category"
+              class="unbudgeted-item"
+            >
+              <span>{{ item.category }}</span>
+              <div class="unbudgeted-actions">
+                <span class="red">{{ formatCurrency(item.spent) }}</span>
+                <button
+                  @click="createBudgetFromUnbudgeted(item.category)"
+                  title="Buat Anggaran"
+                  class="add-budget-btn"
+                >
+                  <i data-feather="plus-circle"></i>
+                </button>
+              </div>
+            </li>
+          </ul>
+        </div>
+      </aside>
+    </div>
+  </div>
+</template>
+
 <style scoped>
 .page-header {
   display: flex;
@@ -485,7 +493,6 @@ watch(
     display: inline;
   }
 }
-
 .fade-in {
   animation: fadeIn 0.3s ease-out;
 }
@@ -531,7 +538,6 @@ watch(
   gap: 12px;
   margin-top: 24px;
 }
-
 .period-controls {
   display: flex;
   justify-content: space-between;
@@ -543,7 +549,7 @@ watch(
 }
 .view-switcher {
   display: flex;
-  background-color: #f3f4f6;
+  background-color: var(--background-color-light);
   border-radius: 8px;
   padding: 4px;
 }
@@ -583,13 +589,12 @@ watch(
   line-height: 1;
 }
 .nav-btn:hover {
-  background-color: #f3f4f6;
+  background-color: var(--background-color-light);
 }
 .copy-btn {
   padding-left: 12px;
   padding-right: 12px;
 }
-
 .budget-card {
   padding: 20px;
 }
@@ -610,7 +615,7 @@ watch(
   margin: 0;
 }
 .icon-wrapper {
-  background-color: #f3f4f6;
+  background-color: var(--background-color-light);
   width: 40px;
   height: 40px;
   border-radius: 50%;
@@ -648,6 +653,9 @@ watch(
   overflow: hidden;
   margin-bottom: 8px;
 }
+body.dark-theme .progress-bar-container {
+  background-color: var(--background-color);
+}
 .progress-bar {
   height: 100%;
   background-color: var(--accent-green);
@@ -680,7 +688,6 @@ watch(
 .green {
   color: var(--accent-green) !important;
 }
-
 .sidebar-title {
   font-size: 18px;
   margin-bottom: 16px;
@@ -729,7 +736,6 @@ hr {
   width: 20px;
   height: 20px;
 }
-
 .empty-state {
   text-align: center;
   padding: 60px 20px;

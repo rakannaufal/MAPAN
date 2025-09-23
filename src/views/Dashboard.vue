@@ -62,6 +62,13 @@ const greeting = computed(() => {
   return `Selamat Malam, ${capitalizedUserName}!`;
 });
 
+const formatCurrency = (value) =>
+  new Intl.NumberFormat("id-ID", {
+    style: "currency",
+    currency: "IDR",
+    minimumFractionDigits: 0,
+  }).format(value || 0);
+
 const keyInsight = computed(() => {
   if (financeStore.loading)
     return { message: "Menganalisis data...", icon: "loader" };
@@ -80,11 +87,17 @@ const keyInsight = computed(() => {
   const largestExpense = Object.entries(expenses).sort(
     (a, b) => b[1] - a[1]
   )[0];
-  if (largestExpense)
+
+  // --- PERBAIKAN UTAMA DI SINI ---
+  if (largestExpense) {
+    const category = largestExpense[0];
+    const amount = formatCurrency(largestExpense[1]);
     return {
-      message: `Pengeluaran terbesarmu bulan ini adalah <strong>${largestExpense[0]}</strong>.`,
+      message: `Pengeluaran terbesarmu bulan ini adalah <strong>${category}</strong> sebesar <strong>${amount}</strong>.`,
       icon: "alert-triangle",
     };
+  }
+
   if (income > expense)
     return {
       message: "Manajemen keuanganmu bulan ini terlihat baik!",
@@ -92,13 +105,6 @@ const keyInsight = computed(() => {
     };
   return { message: "Terus pantau kondisi keuanganmu.", icon: "eye" };
 });
-
-const formatCurrency = (value) =>
-  new Intl.NumberFormat("id-ID", {
-    style: "currency",
-    currency: "IDR",
-    minimumFractionDigits: 0,
-  }).format(value || 0);
 
 const sortedActiveGoals = computed(() => {
   if (!financeStore.goals || financeStore.goals.length === 0) return [];

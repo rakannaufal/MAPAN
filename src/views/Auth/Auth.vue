@@ -81,7 +81,7 @@ watch(view, () => nextTick(() => feather.replace()));
   <div class="auth-container">
     <div class="auth-box">
       <div class="auth-header">
-        <h1 class="logo">MAPAN</h1>
+        <h1 class="logo">WIMPI</h1>
         <p class="subtitle">
           {{
             view === "login" ? "Masuk untuk melanjutkan" : "Buat akun baru Anda"
