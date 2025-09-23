@@ -436,8 +436,6 @@ watch(
 .greeting-text {
   color: var(--text-secondary);
 }
-
-/* --- PERBAIKAN UTAMA DI SINI --- */
 .dashboard-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -447,11 +445,9 @@ watch(
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  justify-content: space-between; /* Membuat konten meregang */
   gap: 8px;
   padding: 16px;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
-  min-height: 120px; /* Beri tinggi minimum agar seragam */
 }
 .summary-card:hover {
   transform: translateY(-4px);
@@ -499,7 +495,6 @@ watch(
     align-items: center;
     gap: 20px;
     padding: 24px;
-    min-height: 0; /* Hapus tinggi minimum di desktop */
   }
   .icon-wrapper {
     width: 52px;
@@ -516,8 +511,6 @@ watch(
     font-size: 24px;
   }
 }
-/* --- AKHIR DARI PERBAIKAN --- */
-
 .bg-gradient-blue {
   background-image: linear-gradient(
     45deg,

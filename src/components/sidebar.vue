@@ -37,12 +37,12 @@ const navItems = [
   { name: "Target", path: "/goals", icon: "flag" },
   { name: "Anggaran", path: "/budgets", icon: "target" },
   { name: "Laporan", path: "/reports", icon: "bar-chart-2" },
-  { name: "Profil", path: "/profile", icon: "user" },
+  { name: "Profil ", path: "/profile", icon: "user" },
 ];
 
 const logout = async () => {
   await financeStore.signOut();
-  router.push("/auth");
+  router.push("/auth/login");
 };
 
 const handleNavLinkClick = () => {

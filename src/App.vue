@@ -3,7 +3,7 @@ import { ref, watch, nextTick, computed, onMounted, onUnmounted } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useFinanceStore } from "@/store/finance";
 import { useThemeStore } from "@/store/theme";
-import Sidebar from "@/components/sidebar.vue";
+import Sidebar from "@/components/Sidebar.vue";
 import feather from "feather-icons";
 
 const financeStore = useFinanceStore();
@@ -11,12 +11,9 @@ const themeStore = useThemeStore();
 const route = useRoute();
 const router = useRouter();
 
-// --- LOGIKA BARU UNTUK AUTO LOGOUT ---
-
+// --- LOGIKA AUTO LOGOUT ---
 let inactivityTimer = null;
-const INACTIVITY_TIMEOUT = 30 * 60 * 1000;
-
-// Daftar aksi pengguna yang dianggap sebagai aktivitas
+const INACTIVITY_TIMEOUT = 30 * 60 * 1000; // 30 menit
 const activityEvents = [
   "mousemove",
   "mousedown",
@@ -25,74 +22,63 @@ const activityEvents = [
   "touchstart",
 ];
 
-// Fungsi yang akan dijalankan saat timer habis
 const logoutDueToInactivity = () => {
-  // Hentikan semua listener agar tidak berjalan setelah logout
   stopInactivityDetection();
-  // Beri notifikasi kepada pengguna
   alert(
     "Anda telah keluar secara otomatis karena tidak ada aktivitas selama 30 menit."
   );
-  // Panggil fungsi signOut dari store
   financeStore.signOut();
-  // Arahkan ke halaman login
   router.push("/auth/login");
 };
 
-// Fungsi untuk me-reset timer setiap kali ada aktivitas
 const resetInactivityTimer = () => {
-  // Hapus timer yang sedang berjalan
   clearTimeout(inactivityTimer);
-  // Mulai timer baru
   inactivityTimer = setTimeout(logoutDueToInactivity, INACTIVITY_TIMEOUT);
 };
 
-// Fungsi untuk mulai mendengarkan aktivitas pengguna
 const startInactivityDetection = () => {
   activityEvents.forEach((event) => {
     window.addEventListener(event, resetInactivityTimer);
   });
-  // Reset timer saat pertama kali dimulai
   resetInactivityTimer();
 };
 
-// Fungsi untuk berhenti mendengarkan aktivitas (saat logout manual atau sesi habis)
 const stopInactivityDetection = () => {
   activityEvents.forEach((event) => {
     window.removeEventListener(event, resetInactivityTimer);
   });
-  // Hapus juga sisa timer yang mungkin ada
   clearTimeout(inactivityTimer);
 };
 
-// Memantau status login pengguna
 watch(
   () => financeStore.user,
   (newUser) => {
     if (newUser) {
-      // Jika pengguna login, mulai deteksi inaktivitas
       startInactivityDetection();
     } else {
-      // Jika pengguna logout, hentikan deteksi
       stopInactivityDetection();
     }
   },
   { immediate: true }
 );
 
-// Pastikan semua listener dihapus saat komponen utama dihancurkan
 onUnmounted(() => {
   stopInactivityDetection();
 });
 
-// --- SISA LOGIKA ANDA (TIDAK BERUBAH) ---
-
+// --- LOGIKA TAMPILAN & SIDEBAR ---
 const isSidebarOpen = ref(false);
 const toggleSidebar = () => (isSidebarOpen.value = !isSidebarOpen.value);
 const closeSidebar = () => (isSidebarOpen.value = false);
 
 const isAuthPage = computed(() => {
-  const authRoutes = ["Auth", "ForgotPassword", "UpdatePassword"];
+  const authRoutes = [
+    "Auth",
+    "ForgotPassword",
+    "UpdatePassword",
+    "Login",
+    "Register",
+  ];
   return authRoutes.includes(route.name);
 });
 
@@ -104,7 +90,7 @@ watch(isSidebarOpen, (isOpen) => {
 watch(
   () => route.path,
   () => {
-    closeSidebar();
+    closeSidebar(); // Tutup sidebar secara otomatis saat pindah halaman
     nextTick(() => feather.replace());
   },
   { immediate: true }
@@ -129,12 +115,15 @@ onMounted(() => {
         <i data-feather="menu"></i>
       </button>
     </header>
+
+    <!-- PERBAIKAN UTAMA: Pindahkan urutan agar overlay berada SETELAH sidebar -->
+    <Sidebar :is-open="isSidebarOpen" @close-sidebar="closeSidebar" />
     <div
       v-if="isSidebarOpen"
       @click="closeSidebar"
       class="sidebar-overlay"
     ></div>
-    <Sidebar :is-open="isSidebarOpen" @close-sidebar="closeSidebar" />
+
     <main class="main-content">
       <router-view />
     </main>
@@ -210,7 +199,8 @@ onMounted(() => {
   .mobile-header {
     display: flex;
   }
-  .is-open ~ .sidebar-overlay {
+  /* Tampilkan overlay HANYA jika sidebar terbuka */
+  .sidebar.is-open + .sidebar-overlay {
     opacity: 1;
     pointer-events: auto;
   }
