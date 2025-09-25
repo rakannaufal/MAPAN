@@ -7,17 +7,142 @@ const financeStore = useFinanceStore();
 const showForm = ref(false);
 const editingTxId = ref(null);
 
-// Fungsi untuk mendapatkan waktu saat ini dalam format HH:MM
+// --- STATE BARU UNTUK FILTER ---
+const filterMode = ref("monthly"); // Opsi: 'daily', 'monthly', 'yearly', 'custom'
+const now = new Date();
+const currentDay = ref(now.toISOString().slice(0, 10));
+const currentMonth = ref(
+  `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`
+);
+const currentYear = ref(now.getFullYear());
+const customStartDate = ref(
+  new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10)
+);
+const customEndDate = ref(now.toISOString().slice(0, 10));
+
+// --- STATE BARU UNTUK PENGURUTAN (SORTING) ---
+const sortKey = ref("transaction_at"); // Default: urutkan berdasarkan waktu
+const sortDirection = ref("desc"); // Default: dari yang terbaru
+
+// --- COMPUTED PROPERTIES BARU UNTUK FILTER & SORTING ---
+const displayPeriod = computed(() => {
+  if (filterMode.value === "daily") {
+    return new Date(currentDay.value).toLocaleDateString("id-ID", {
+      weekday: "long",
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    });
+  }
+  if (filterMode.value === "monthly") {
+    const [year, month] = currentMonth.value.split("-");
+    return new Date(year, month - 1).toLocaleDateString("id-ID", {
+      month: "long",
+      year: "numeric",
+    });
+  }
+  if (filterMode.value === "yearly") {
+    return `Tahun ${currentYear.value}`;
+  }
+  return "Pilih Rentang Tanggal";
+});
+
+const sortedAndFilteredTransactions = computed(() => {
+  if (!financeStore.transactions) return [];
+
+  let start, end;
+
+  switch (filterMode.value) {
+    case "monthly":
+      start = new Date(currentMonth.value);
+      end = new Date(
+        start.getFullYear(),
+        start.getMonth() + 1,
+        0,
+        23,
+        59,
+        59,
+        999
+      );
+      break;
+    case "yearly":
+      start = new Date(currentYear.value, 0, 1);
+      end = new Date(currentYear.value, 11, 31, 23, 59, 59, 999);
+      break;
+    case "custom":
+      start = new Date(customStartDate.value);
+      start.setHours(0, 0, 0, 0);
+      end = new Date(customEndDate.value);
+      end.setHours(23, 59, 59, 999);
+      break;
+    case "daily":
+    default:
+      const today = new Date(currentDay.value);
+      start = new Date(today.setUTCHours(0, 0, 0, 0));
+      end = new Date(today.setUTCHours(23, 59, 59, 999));
+      break;
+  }
+
+  const filtered = financeStore.transactions.filter((tx) => {
+    const txDate = new Date(tx.transaction_at);
+    return txDate >= start && txDate <= end;
+  });
+
+  // Terapkan pengurutan setelah filtering
+  return [...filtered].sort((a, b) => {
+    let valA = a[sortKey.value];
+    let valB = b[sortKey.value];
+
+    if (sortKey.value === "transaction_at") {
+      valA = new Date(valA).getTime();
+      valB = new Date(valB).getTime();
+    }
+
+    if (sortDirection.value === "asc") {
+      return valA > valB ? 1 : -1;
+    } else {
+      return valA < valB ? 1 : -1;
+    }
+  });
+});
+
+// --- FUNGSI BARU UNTUK NAVIGASI PERIODE & PENGURUTAN ---
+const changePeriod = (direction) => {
+  if (filterMode.value === "daily") {
+    const date = new Date(currentDay.value);
+    date.setDate(date.getDate() + direction);
+    currentDay.value = date.toISOString().slice(0, 10);
+  } else if (filterMode.value === "monthly") {
+    const [year, month] = currentMonth.value.split("-").map(Number);
+    const date = new Date(year, month - 1, 1);
+    date.setMonth(date.getMonth() + direction);
+    currentMonth.value = `${date.getFullYear()}-${String(
+      date.getMonth() + 1
+    ).padStart(2, "0")}`;
+  } else if (filterMode.value === "yearly") {
+    currentYear.value += direction;
+  }
+};
+
+const setSort = (key) => {
+  if (sortKey.value === key) {
+    sortDirection.value = sortDirection.value === "asc" ? "desc" : "asc";
+  } else {
+    sortKey.value = key;
+    sortDirection.value = key === "transaction_at" ? "desc" : "asc"; // Default asc untuk jumlah
+  }
+};
+
+// --- SISA KODE ANDA (TIDAK BERUBAH) ---
 const getCurrentTime = () => {
   const now = new Date();
   return `${String(now.getHours()).padStart(2, "0")}:${String(
     now.getMinutes()
   ).padStart(2, "0")}`;
 };
-
 const initialFormState = {
   date: new Date().toISOString().slice(0, 10),
-  time: getCurrentTime(), // Tambahkan waktu saat ini
+  time: getCurrentTime(),
   category: "",
   amount: null,
   type: "Pengeluaran",
@@ -26,7 +151,6 @@ const initialFormState = {
 const formTx = ref({ ...initialFormState });
 const formattedAmount = ref("");
 const newCategoryName = ref("");
-
 const expenseCategories = [
   "Makanan",
   "Jajan",
@@ -48,15 +172,12 @@ const incomeCategories = [
   "Hadiah",
   "Lainnya",
 ];
-const currentCategories = computed(() => {
-  return formTx.value.type === "Pemasukan"
-    ? incomeCategories
-    : expenseCategories;
-});
-
-const showNewCategoryInput = computed(() => {
-  return formTx.value.category === "Lainnya";
-});
+const currentCategories = computed(() =>
+  formTx.value.type === "Pemasukan" ? incomeCategories : expenseCategories
+);
+const showNewCategoryInput = computed(
+  () => formTx.value.category === "Lainnya"
+);
 
 const resetForm = () => {
   editingTxId.value = null;
@@ -78,7 +199,6 @@ const startEdit = (tx) => {
     date: txDate.toISOString().slice(0, 10),
     time: txDate.toTimeString().slice(0, 5),
   };
-
   formattedAmount.value = new Intl.NumberFormat("id-ID").format(tx.amount);
   editingTxId.value = tx.id;
   const standardCategories =
@@ -126,15 +246,10 @@ const handleSubmit = async () => {
     }
     dataToSave.category = newCategoryName.value.trim();
   }
-
-  // Gabungkan tanggal dan waktu menjadi satu timestamp ISO
   const combinedDateTime = new Date(`${dataToSave.date}T${dataToSave.time}`);
   dataToSave.transaction_at = combinedDateTime.toISOString();
-
-  // Hapus properti date dan time yang terpisah
   delete dataToSave.date;
   delete dataToSave.time;
-
   try {
     if (editingTxId.value) {
       await financeStore.updateTransaction(editingTxId.value, dataToSave);
@@ -174,9 +289,22 @@ const formatCurrency = (value) =>
     currency: "IDR",
     minimumFractionDigits: 0,
   }).format(value);
+
+onMounted(() => {
+  financeStore.fetchAllTransactions();
+});
+
 watch(
-  () => financeStore.transactions,
-  () => nextTick(() => feather.replace()),
+  () => [
+    financeStore.transactions,
+    filterMode.value,
+    showForm.value,
+    sortKey.value,
+    sortDirection.value,
+  ],
+  () => {
+    nextTick(() => feather.replace());
+  },
   { deep: true, immediate: true }
 );
 </script>
@@ -191,7 +319,7 @@ watch(
       </button>
     </div>
 
-    <div v-if="showForm" class="card form-card fade-in">
+    <div v-if="showForm" class="card form-card">
       <form @submit.prevent="handleSubmit">
         <h3 class="form-title">
           {{ editingTxId ? "Edit Transaksi" : "Transaksi Baru" }}
@@ -224,7 +352,7 @@ watch(
               </option>
             </select>
           </div>
-          <div v-if="showNewCategoryInput" class="form-group fade-in">
+          <div v-if="showNewCategoryInput" class="form-group">
             <label>Nama Kategori Baru</label
             ><input
               v-model="newCategoryName"
@@ -276,14 +404,96 @@ watch(
       </form>
     </div>
 
+    <!-- --- KONTROL FILTER BARU --- -->
+    <div class="card period-controls">
+      <div class="view-switcher">
+        <button
+          :class="{ active: filterMode === 'daily' }"
+          @click="
+            filterMode = 'daily';
+            currentDay = new Date().toISOString().slice(0, 10);
+          "
+        >
+          Harian
+        </button>
+        <button
+          :class="{ active: filterMode === 'monthly' }"
+          @click="filterMode = 'monthly'"
+        >
+          Bulanan
+        </button>
+        <button
+          :class="{ active: filterMode === 'yearly' }"
+          @click="filterMode = 'yearly'"
+        >
+          Tahunan
+        </button>
+        <button
+          :class="{ active: filterMode === 'custom' }"
+          @click="filterMode = 'custom'"
+        >
+          Kustom
+        </button>
+      </div>
+
+      <div v-if="filterMode !== 'custom'" class="period-navigation">
+        <button class="nav-btn" @click="changePeriod(-1)">
+          <i data-feather="chevron-left"></i>
+        </button>
+        <span class="period-display">{{ displayPeriod }}</span>
+        <button class="nav-btn" @click="changePeriod(1)">
+          <i data-feather="chevron-right"></i>
+        </button>
+      </div>
+
+      <div v-if="filterMode === 'custom'" class="custom-date-range">
+        <div class="form-group">
+          <label for="start-date">Dari Tanggal</label>
+          <input
+            v-model="customStartDate"
+            id="start-date"
+            type="date"
+            class="form-input"
+          />
+        </div>
+        <div class="form-group">
+          <label for="end-date">Sampai Tanggal</label>
+          <input
+            v-model="customEndDate"
+            id="end-date"
+            type="date"
+            class="form-input"
+          />
+        </div>
+      </div>
+    </div>
+
     <div class="card table-container">
       <table class="transaction-table">
         <thead>
           <tr>
-            <th>Waktu</th>
+            <th @click="setSort('transaction_at')" class="sortable">
+              Waktu
+              <i
+                v-if="sortKey === 'transaction_at'"
+                :data-feather="
+                  sortDirection === 'asc' ? 'arrow-up' : 'arrow-down'
+                "
+                class="sort-icon"
+              ></i>
+            </th>
             <th>Kategori</th>
             <th>Keterangan</th>
-            <th class="text-right">Jumlah</th>
+            <th @click="setSort('amount')" class="text-right sortable">
+              <i
+                v-if="sortKey === 'amount'"
+                :data-feather="
+                  sortDirection === 'asc' ? 'arrow-up' : 'arrow-down'
+                "
+                class="sort-icon"
+              ></i>
+              Jumlah
+            </th>
             <th class="action-header">Aksi</th>
           </tr>
         </thead>
@@ -291,10 +501,12 @@ watch(
           <tr v-if="financeStore.loading">
             <td colspan="5" class="state-cell">Memuat...</td>
           </tr>
-          <tr v-else-if="financeStore.transactions.length === 0">
-            <td colspan="5" class="state-cell">Belum ada transaksi.</td>
+          <tr v-else-if="sortedAndFilteredTransactions.length === 0">
+            <td colspan="5" class="state-cell">
+              Tidak ada transaksi pada periode ini.
+            </td>
           </tr>
-          <tr v-for="tx in financeStore.transactions" :key="tx.id">
+          <tr v-for="tx in sortedAndFilteredTransactions" :key="tx.id">
             <td>{{ formatDateTime(tx.transaction_at) }}</td>
             <td>{{ tx.category }}</td>
             <td class="notes-cell">{{ tx.notes }}</td>
@@ -331,19 +543,6 @@ watch(
 </template>
 
 <style scoped>
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(-10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-.fade-in {
-  animation: fadeIn 0.3s ease-out;
-}
 .page-header {
   display: flex;
   justify-content: space-between;
@@ -451,7 +650,7 @@ watch(
   border-radius: 50%;
 }
 .action-btn:hover {
-  background-color: #f3f4f6;
+  background-color: var(--background-color-light);
 }
 .edit-btn:hover {
   color: var(--primary-color);
@@ -459,9 +658,100 @@ watch(
 .delete-btn:hover {
   color: var(--accent-red);
 }
+
+/* --- STYLE BARU UNTUK FILTER --- */
+.period-controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+.view-switcher {
+  display: flex;
+  background-color: #f3f4f6;
+  border-radius: 8px;
+  padding: 4px;
+}
+.view-switcher button {
+  background: none;
+  border: none;
+  padding: 6px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+  color: var(--text-secondary);
+  transition: all 0.2s ease;
+}
+.view-switcher button.active {
+  background-color: var(--surface-color);
+  color: var(--primary-color);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+.period-navigation {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.period-display {
+  font-weight: 600;
+  font-size: 16px;
+  min-width: 220px;
+  text-align: center;
+}
+.nav-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-primary);
+  padding: 8px;
+  border-radius: 50%;
+  line-height: 1;
+}
+.nav-btn:hover {
+  background-color: var(--background-color-light);
+}
+.custom-date-range {
+  display: flex;
+  gap: 16px;
+  align-items: flex-end;
+}
+.custom-date-range .form-group {
+  margin-bottom: 0;
+}
+.custom-date-range label {
+  font-size: 12px;
+  margin-bottom: 4px;
+}
+.sortable {
+  cursor: pointer;
+  user-select: none;
+}
+.sortable:hover {
+  color: var(--text-primary);
+}
+.sort-icon {
+  width: 14px;
+  height: 14px;
+  vertical-align: middle;
+  margin-left: 4px;
+}
+.text-right.sortable .sort-icon {
+  margin-left: 0;
+  margin-right: 4px;
+}
 @media (max-width: 768px) {
   .page-title {
     font-size: 24px;
+  }
+  .period-controls {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .period-navigation {
+    justify-content: center;
   }
 }
 </style>

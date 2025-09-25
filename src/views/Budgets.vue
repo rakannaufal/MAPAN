@@ -549,7 +549,7 @@ watch(
 }
 .view-switcher {
   display: flex;
-  background-color: var(--background-color-light);
+  background-color: #f3f4f6;
   border-radius: 8px;
   padding: 4px;
 }
