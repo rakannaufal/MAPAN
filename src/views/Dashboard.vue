@@ -83,12 +83,13 @@ const keyInsight = computed(() => {
       message: `Pengeluaran bulan ini lebih besar dari pemasukan.`,
       icon: "trending-down",
     };
+
+  // PERBAIKAN DILAKUKAN DI STORE, SEHINGGA DATA DI SINI OTOMATIS BENAR
   const expenses = financeStore.expenseByCategory;
   const largestExpense = Object.entries(expenses).sort(
     (a, b) => b[1] - a[1]
   )[0];
 
-  // --- PERBAIKAN UTAMA DI SINI ---
   if (largestExpense) {
     const category = largestExpense[0];
     const amount = formatCurrency(largestExpense[1]);
@@ -163,6 +164,7 @@ const lineChartBgColor = computed(() =>
 );
 
 const expenseChartData = computed(() => {
+  // PERBAIKAN DILAKUKAN DI STORE, SEHINGGA DATA DI SINI OTOMATIS BENAR
   const expenses = financeStore.expenseByCategory;
   if (!expenses) return { labels: [], datasets: [] };
   return {
@@ -176,6 +178,7 @@ const expenseChartData = computed(() => {
   };
 });
 const incomeChartData = computed(() => {
+  // PERBAIKAN DILAKUKAN DI STORE, SEHINGGA DATA DI SINI OTOMATIS BENAR
   const incomes = financeStore.incomeByCategory;
   if (!incomes) return { labels: [], datasets: [] };
   return {
@@ -433,7 +436,7 @@ watch(
               :data="incomeChartData"
               :options="chartOptions"
             />
-            <p v-else class="no-data">Belum ada data pemasukan.</p>
+            <p v-else class="no-data">Belum ada data pemasukan bulan ini.</p>
           </div>
         </div>
         <div class="card chart-card fade-in" style="animation-delay: 900ms">
@@ -448,7 +451,7 @@ watch(
               :data="expenseChartData"
               :options="chartOptions"
             />
-            <p v-else class="no-data">Belum ada data pengeluaran.</p>
+            <p v-else class="no-data">Belum ada data pengeluaran bulan ini.</p>
           </div>
         </div>
       </div>

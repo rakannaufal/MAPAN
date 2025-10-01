@@ -42,11 +42,19 @@ export const useFinanceStore = defineStore("finance", () => {
     return { income, expense };
   });
 
+  // === PERBAIKAN DI SINI ===
+  // Getter ini sekarang hanya menghitung transaksi pada bulan berjalan.
   const expenseByCategory = computed(() => {
     if (!transactions.value) return {};
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     const expenseMap = new Map();
     transactions.value
-      .filter((tx) => tx.type === "Pengeluaran")
+      .filter(
+        (tx) =>
+          tx.type === "Pengeluaran" &&
+          new Date(tx.transaction_at) >= startOfMonth
+      )
       .forEach((tx) => {
         let key = tx.category;
         if (tx.category === "Tabungan Target" && tx.notes) {
@@ -58,11 +66,18 @@ export const useFinanceStore = defineStore("finance", () => {
     return Object.fromEntries(expenseMap);
   });
 
+  // === PERBAIKAN DI SINI ===
+  // Getter ini sekarang hanya menghitung transaksi pada bulan berjalan.
   const incomeByCategory = computed(() => {
     if (!transactions.value) return {};
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     const incomeMap = new Map();
     transactions.value
-      .filter((tx) => tx.type === "Pemasukan")
+      .filter(
+        (tx) =>
+          tx.type === "Pemasukan" && new Date(tx.transaction_at) >= startOfMonth
+      )
       .forEach((tx) => {
         const key = tx.category;
         incomeMap.set(key, (incomeMap.get(key) || 0) + tx.amount);

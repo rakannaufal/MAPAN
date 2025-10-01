@@ -16,7 +16,7 @@ const financeStore = useFinanceStore();
 const themeStore = useThemeStore();
 const router = useRouter();
 
-const appVersion = "1.3.0";
+const appVersion = "1.4.0";
 
 const currentLogo = computed(() => {
   return themeStore.theme === "light" ? logoDark : logoLight;
@@ -38,6 +38,7 @@ const navItems = [
   { name: "Anggaran", path: "/budgets", icon: "target" },
   { name: "Laporan", path: "/reports", icon: "bar-chart-2" },
   { name: "Profil ", path: "/profile", icon: "user" },
+  { name: "Hubungi Kami", path: "/contact", icon: "mail" },
 ];
 
 const logout = async () => {

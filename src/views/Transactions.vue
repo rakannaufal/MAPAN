@@ -20,6 +20,9 @@ const customStartDate = ref(
 );
 const customEndDate = ref(now.toISOString().slice(0, 10));
 
+// --- STATE BARU UNTUK PENCARIAN ---
+const searchKeyword = ref("");
+
 // --- STATE BARU UNTUK PENGURUTAN (SORTING) ---
 const sortKey = ref("transaction_at"); // Default: urutkan berdasarkan waktu
 const sortDirection = ref("desc"); // Default: dari yang terbaru
@@ -50,6 +53,8 @@ const displayPeriod = computed(() => {
 const sortedAndFilteredTransactions = computed(() => {
   if (!financeStore.transactions) return [];
 
+  // 1. FILTER BERDASARKAN TANGGAL
+  let dateFiltered;
   let start, end;
 
   switch (filterMode.value) {
@@ -83,13 +88,25 @@ const sortedAndFilteredTransactions = computed(() => {
       break;
   }
 
-  const filtered = financeStore.transactions.filter((tx) => {
+  dateFiltered = financeStore.transactions.filter((tx) => {
     const txDate = new Date(tx.transaction_at);
     return txDate >= start && txDate <= end;
   });
 
-  // Terapkan pengurutan setelah filtering
-  return [...filtered].sort((a, b) => {
+  // 2. FILTER BERDASARKAN KEYWORD PENCARIAN
+  let finalFiltered = dateFiltered;
+  if (searchKeyword.value.trim() !== "") {
+    const searchTerm = searchKeyword.value.trim().toLowerCase();
+    finalFiltered = dateFiltered.filter((tx) => {
+      const categoryMatch = tx.category.toLowerCase().includes(searchTerm);
+      const notesMatch =
+        tx.notes && tx.notes.toLowerCase().includes(searchTerm);
+      return categoryMatch || notesMatch;
+    });
+  }
+
+  // 3. TERAPKAN PENGURUTAN (SORTING)
+  return [...finalFiltered].sort((a, b) => {
     let valA = a[sortKey.value];
     let valB = b[sortKey.value];
 
@@ -133,7 +150,7 @@ const setSort = (key) => {
   }
 };
 
-// --- SISA KODE ANDA (TIDAK BERUBAH) ---
+// --- SISA KODE (TIDAK BERUBAH) ---
 const getCurrentTime = () => {
   const now = new Date();
   return `${String(now.getHours()).padStart(2, "0")}:${String(
@@ -301,6 +318,7 @@ watch(
     showForm.value,
     sortKey.value,
     sortDirection.value,
+    searchKeyword.value, // Tambahkan searchKeyword ke watcher
   ],
   () => {
     nextTick(() => feather.replace());
@@ -404,7 +422,6 @@ watch(
       </form>
     </div>
 
-    <!-- --- KONTROL FILTER BARU --- -->
     <div class="card period-controls">
       <div class="view-switcher">
         <button
@@ -434,6 +451,16 @@ watch(
         >
           Kustom
         </button>
+      </div>
+
+      <div class="search-wrapper">
+        <i data-feather="search" class="search-icon"></i>
+        <input
+          v-model="searchKeyword"
+          type="text"
+          placeholder="Cari kategori atau catatan..."
+          class="search-input"
+        />
       </div>
 
       <div v-if="filterMode !== 'custom'" class="period-navigation">
@@ -503,7 +530,7 @@ watch(
           </tr>
           <tr v-else-if="sortedAndFilteredTransactions.length === 0">
             <td colspan="5" class="state-cell">
-              Tidak ada transaksi pada periode ini.
+              Tidak ada transaksi yang cocok dengan filter atau pencarian Anda.
             </td>
           </tr>
           <tr v-for="tx in sortedAndFilteredTransactions" :key="tx.id">
@@ -690,6 +717,36 @@ watch(
   color: var(--primary-color);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
+/* --- STYLE BARU UNTUK PENCARIAN --- */
+.search-wrapper {
+  position: relative;
+  flex-grow: 1;
+  max-width: 350px;
+}
+.search-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-secondary);
+  width: 18px;
+  height: 18px;
+}
+.search-input {
+  width: 100%;
+  padding: 8px 12px 8px 38px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background-color: var(--background-color);
+  color: var(--text-primary);
+  transition: border-color 0.2s ease;
+}
+.search-input:focus {
+  outline: none;
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 2px rgba(var(--primary-color-rgb), 0.2);
+}
+
 .period-navigation {
   display: flex;
   align-items: center;
@@ -742,13 +799,14 @@ watch(
   margin-left: 0;
   margin-right: 4px;
 }
-@media (max-width: 768px) {
-  .page-title {
-    font-size: 24px;
-  }
+@media (max-width: 992px) {
   .period-controls {
     flex-direction: column;
     align-items: stretch;
+  }
+  .search-wrapper {
+    max-width: 100%;
+    order: -1; /* Pindahkan search ke atas pada mobile */
   }
   .period-navigation {
     justify-content: center;
