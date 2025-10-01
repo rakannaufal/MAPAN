@@ -14,23 +14,18 @@ function formatBoldCurrency(amount) {
     style: "currency",
     currency: "IDR",
     minimumFractionDigits: 0,
-  }).format(amount);
+  }).format(Math.abs(amount));
   return `<strong>${formatted}</strong>`;
 }
 
-// --- FUNGSI UTAMA DENGAN LOGIKA FINAL ---
-
-/**
- * Menganalisis kondisi keuangan dan memberikan rekomendasi tabungan.
- * @param {object} financialData - Data keuangan pengguna.
- * @param {string} frequency - Frekuensi tabungan ('daily', 'weekly', 'monthly').
- * @returns {object} - Objek berisi rekomendasi.
- */
+// --- FUNGSI UTAMA DENGAN LOGIKA BARU ---
 export function getGoalSuggestion(financialData, frequency = "weekly") {
   const {
     targetAmount,
     currentAmount,
     targetDate,
+    allTransactions,
+    netWorth,
     monthlyIncome,
     monthlyExpense,
   } = financialData;
@@ -39,117 +34,209 @@ export function getGoalSuggestion(financialData, frequency = "weekly") {
   if (amountNeeded <= 0) {
     return {
       status: "COMPLETED",
+      statusInfo: {
+        label: "Target Tercapai!",
+        icon: "check-circle",
+        type: "realistic",
+      },
       suggestion: 0,
-      message: "Selamat! Target ini sudah tercapai.",
+      message:
+        "Selamat, target ini sudah tercapai! Saatnya merayakan atau membuat target baru yang lebih besar!",
+      analysis: null,
     };
   }
 
   if (!targetDate) {
     return {
       status: "NO_DATE",
+      statusInfo: {
+        label: "Butuh Info Tanggal",
+        icon: "help-circle",
+        type: "adjustment",
+      },
       suggestion: 0,
-      message: "Tentukan tanggal target untuk mendapatkan rekomendasi.",
+      message:
+        "Tolong tentukan tanggal targetnya dulu ya, agar saya bisa bantu hitung.",
+      analysis: null,
     };
   }
 
   const now = new Date();
-  const endDate = new Date(targetDate);
+  now.setHours(0, 0, 0, 0);
+  const endDate = new Date(targetDate + "T00:00:00");
   const daysRemaining = (endDate - now) / (1000 * 60 * 60 * 24);
 
-  if (daysRemaining <= 1) {
+  if (daysRemaining <= 0) {
     return {
       status: "OVERDUE",
+      statusInfo: {
+        label: "Target Terlewat",
+        icon: "alert-triangle",
+        type: "negative",
+      },
       suggestion: 0,
       message:
-        "Tanggal target sudah terlalu dekat atau terlewat. Silakan perbarui tanggalnya.",
+        "Tanggal target sudah lewat. Yuk, atur ulang tanggalnya agar lebih realistis.",
+      analysis: null,
     };
   }
 
-  // 1. Tentukan pembagi dan unit waktu berdasarkan frekuensi
-  let timeDivider, timeUnit;
+  // === LANGKAH 1: Analisis Historis ===
+  const sixMonthsAgo = new Date();
+  sixMonthsAgo.setMonth(now.getMonth() - 6);
+  const recentTransactions = allTransactions.filter(
+    (tx) => new Date(tx.transaction_at) >= sixMonthsAgo
+  );
+
+  let totalIncome = 0;
+  let totalExpense = 0;
+  recentTransactions.forEach((tx) => {
+    if (tx.type === "Pemasukan") totalIncome += tx.amount;
+    else totalExpense += tx.amount;
+  });
+
+  const validMonths = 6;
+  const avgMonthlyIncome = totalIncome / validMonths;
+  const avgMonthlyDisposableIncome = (totalIncome - totalExpense) / validMonths;
+  const currentMonthDisposableIncome = monthlyIncome - monthlyExpense;
+
+  // === LANGKAH 2: Pemeriksaan Kewajaran ===
+  if (targetAmount > netWorth * 5 && targetAmount > avgMonthlyIncome * 12) {
+    return {
+      status: "DISPROPORTIONATE",
+      statusInfo: {
+        label: "Target Tidak Proporsional",
+        icon: "alert-octagon",
+        type: "negative",
+      },
+      suggestion: 0,
+      message: `Target sebesar ${formatBoldCurrency(
+        targetAmount
+      )} ini sangat jauh di atas total kekayaan bersih dan pemasukan tahunan Anda. Ini adalah target jangka panjang yang butuh strategi investasi. Coba pecah menjadi target-target kecil yang lebih realistis.`,
+      analysis: { avgMonthlyDisposableIncome, currentMonthDisposableIncome },
+    };
+  }
+
+  // === LANGKAH 3: Hitung Kebutuhan & Kapasitas per Periode ===
+  let timeDivider, timeUnit, disposableIncomeForPeriod;
+  const primaryCapacity =
+    avgMonthlyDisposableIncome > 0 ? avgMonthlyDisposableIncome : 0;
+
   switch (frequency) {
     case "daily":
       timeDivider = daysRemaining;
-      timeUnit = "hari";
+      timeUnit = "harian";
+      disposableIncomeForPeriod = primaryCapacity / 30.44;
       break;
     case "monthly":
-      timeDivider =
-        (endDate.getFullYear() - now.getFullYear()) * 12 +
-          (endDate.getMonth() - now.getMonth()) || 1;
-      timeUnit = "bulan";
+      timeDivider = daysRemaining / 30.44;
+      timeUnit = "bulanan";
+      disposableIncomeForPeriod = primaryCapacity;
       break;
-    case "weekly":
     default:
       timeDivider = daysRemaining / 7;
-      timeUnit = "minggu";
+      timeUnit = "mingguan";
+      disposableIncomeForPeriod = primaryCapacity / 4.33;
       break;
   }
+  const requiredSavings =
+    timeDivider > 0 ? roundToSensibleAmount(amountNeeded / timeDivider) : 0;
 
-  if (timeDivider <= 0) timeDivider = 1;
+  const analysisData = {
+    avgMonthlyDisposableIncome,
+    currentMonthDisposableIncome,
+    disposableIncomeForPeriod,
+    requiredSavings,
+    timeUnit,
+  };
 
-  // 2. Hitung KEBUTUHAN tabungan berdasarkan frekuensi
-  const requiredSavings = roundToSensibleAmount(amountNeeded / timeDivider);
-
-  // 3. Hitung KEMAMPUAN menabung bulanan (sisa uang)
-  const monthlyDiscretionaryIncome = monthlyIncome - monthlyExpense;
-  const SAFETY_BUFFER_PERCENTAGE = 0.2;
-  const savingsCapacity =
-    monthlyDiscretionaryIncome * (1 - SAFETY_BUFFER_PERCENTAGE);
-
-  let suggestion = requiredSavings;
-  let status = "REALISTIC";
-  let message = "";
-
-  // 4. Logika Cerdas: Bandingkan kebutuhan dengan kapasitas & berikan saran yang jelas
-  if (monthlyDiscretionaryIncome <= 0) {
-    status = "UNREALISTIC";
-    message =
-      "Arus kas bulanan Anda negatif. Sulit untuk merekomendasikan tabungan saat ini. Coba fokus untuk mengurangi pengeluaran terlebih dahulu.";
-    suggestion = 0;
-  } else {
-    // Konversi kebutuhan ke basis bulanan untuk perbandingan yang adil
-    let requiredMonthlyEquivalent;
-    if (frequency === "daily")
-      requiredMonthlyEquivalent = requiredSavings * 30.44;
-    else if (frequency === "weekly")
-      requiredMonthlyEquivalent = requiredSavings * 4.33;
-    else requiredMonthlyEquivalent = requiredSavings;
-
-    if (requiredMonthlyEquivalent <= savingsCapacity) {
-      status = "IDEAL";
-      message = `Rencana ini sangat realistis! Anda cukup menyisihkan ${formatBoldCurrency(
-        requiredSavings
-      )} per <strong>${timeUnit}</strong>. Ini masih menyisakan ruang yang cukup untuk kebutuhan lain.`;
-    } else if (requiredMonthlyEquivalent <= monthlyDiscretionaryIncome) {
-      status = "CHALLENGING";
-      message = `Bisa dicapai, tapi butuh komitmen! Anda perlu menyisihkan ${formatBoldCurrency(
-        requiredSavings
-      )} per <strong>${timeUnit}</strong>. Rencana ini akan menggunakan hampir seluruh sisa uang Anda.`;
-    } else {
-      status = "NEEDS_ADJUSTMENT";
-      const monthsNeeded = Math.ceil(amountNeeded / savingsCapacity);
-      const newTargetDate = new Date();
-      newTargetDate.setMonth(newTargetDate.getMonth() + monthsNeeded);
-      const newDateFormatted = newTargetDate.toLocaleDateString("id-ID", {
-        month: "long",
-        year: "numeric",
-      });
-
-      let alternativeSuggestion = 0;
-      if (frequency === "daily")
-        alternativeSuggestion = roundToSensibleAmount(savingsCapacity / 30.44);
-      else if (frequency === "weekly")
-        alternativeSuggestion = roundToSensibleAmount(savingsCapacity / 4.33);
-      else alternativeSuggestion = roundToSensibleAmount(savingsCapacity);
-
-      suggestion = alternativeSuggestion > 0 ? alternativeSuggestion : 0;
-      message = `Target ini belum realistis. Kebutuhan Anda (${formatBoldCurrency(
-        requiredSavings
-      )} per ${timeUnit}) melebihi sisa uang bulanan Anda. <br><br>Saran kami: coba tabung sesuai kapasitas Anda yaitu sekitar ${formatBoldCurrency(
-        suggestion
-      )} per <strong>${timeUnit}</strong>. Dengan begitu, target Anda akan tercapai sekitar bulan <strong>${newDateFormatted}</strong>.`;
-    }
+  // === LANGKAH 4: Logika Saran Hybrid ===
+  if (avgMonthlyDisposableIncome <= 0) {
+    return {
+      status: "NEGATIVE_CASHFLOW",
+      statusInfo: {
+        label: "Arus Kas Negatif",
+        icon: "x-circle",
+        type: "negative",
+      },
+      suggestion: 0,
+      message:
+        "Berdasarkan histori, sisa dana rata-rata Anda negatif. Sulit untuk berkomitmen pada target baru. Fokus perbaiki arus kas dulu, ya!",
+      analysis: analysisData,
+    };
   }
 
-  return { status, suggestion, message };
+  const capacityRatio =
+    disposableIncomeForPeriod > 0
+      ? requiredSavings / disposableIncomeForPeriod
+      : Infinity;
+
+  if (capacityRatio <= 1.0) {
+    let message = `Dengan menabung ${formatBoldCurrency(
+      requiredSavings
+    )} secara <strong>${timeUnit}</strong>, Anda akan mencapai target sesuai jadwal.`;
+    if (currentMonthDisposableIncome < avgMonthlyDisposableIncome * 0.8) {
+      message += `<br><br><strong>Catatan:</strong> Hati-hati, sisa dana Anda bulan ini lebih rendah dari biasanya. Pastikan Anda tetap disiplin!`;
+    }
+    return {
+      status: "REALISTIC",
+      statusInfo: {
+        label: "Sangat Realistis",
+        icon: "check-circle",
+        type: "realistic",
+      },
+      suggestion: requiredSavings,
+      message: message,
+      analysis: analysisData,
+    };
+  } else {
+    // =================================================================
+    // === PERUBAHAN UTAMA ADA DI SINI ===
+    // =================================================================
+
+    // 1. Tetapkan saran berdasarkan kapasitas, bukan kebutuhan.
+    const realisticSuggestion = roundToSensibleAmount(
+      disposableIncomeForPeriod
+    );
+
+    const requiredMonths = Math.ceil(amountNeeded / avgMonthlyDisposableIncome);
+    const realisticDate = new Date();
+    realisticDate.setMonth(
+      realisticDate.getMonth() + requiredMonths,
+      realisticDate.getDate() + 7
+    );
+    const realisticDateFormatted = realisticDate.toLocaleDateString("id-ID", {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    });
+
+    // 2. Ubah pesan untuk memberi dua pilihan: tambah dana sekarang ATAU ubah tanggal.
+    const message = `
+        Kebutuhan menabung Anda (${formatBoldCurrency(
+          requiredSavings
+        )}/${timeUnit}) melebihi kapasitas finansial Anda (${formatBoldCurrency(
+      disposableIncomeForPeriod
+    )}/${timeUnit}).
+        <br><br>
+        <strong>Anda bisa menambah dana sekarang sebesar kapasitas Anda</strong>, yaitu ${formatBoldCurrency(
+          realisticSuggestion
+        )}, untuk tetap membuat progres.
+        <br><br>
+        Namun, agar target tercapai, kami tetap merekomendasikan untuk <strong>menyesuaikan tanggal target</strong> ke sekitar <strong>${realisticDateFormatted}</strong>.
+      `;
+
+    return {
+      status: "NEEDS_ADJUSTMENT",
+      statusInfo: {
+        label: "Perlu Penyesuaian",
+        icon: "alert-triangle",
+        type: "adjustment",
+      },
+      // 3. Kembalikan saran yang realistis agar tombol tetap muncul.
+      suggestion: realisticSuggestion,
+      message: message,
+      analysis: analysisData,
+    };
+  }
 }

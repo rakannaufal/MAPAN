@@ -1,12 +1,12 @@
 <script setup>
-import { ref, watch, nextTick, computed } from "vue";
+import { ref, watch, nextTick, computed, onMounted } from "vue";
 import { useFinanceStore } from "@/store/finance";
 import { getGoalSuggestion } from "@/services/aiAssistant.js";
 import feather from "feather-icons";
 
 const financeStore = useFinanceStore();
 
-// State untuk form Tambah/Edit Target
+// State
 const showForm = ref(false);
 const editingGoalId = ref(null);
 const initialFormState = {
@@ -18,27 +18,35 @@ const initialFormState = {
 const formGoal = ref({ ...initialFormState });
 const formattedTargetAmount = ref("");
 const formattedCurrentAmount = ref("");
-
-// State untuk modal "Tambah Dana"
 const showAddFundsModal = ref(false);
 const selectedGoal = ref(null);
 const amountToAdd = ref(null);
 const formattedAmountToAdd = ref("");
-
-// State untuk Modal Asisten AI
 const showAiModal = ref(false);
-const aiSuggestionFrequency = ref("weekly"); // 'daily', 'weekly', 'monthly'
+const aiSuggestionFrequency = ref("weekly");
+const isExplanationVisible = ref(false);
 
-// Computed property untuk menghitung rekomendasi AI secara reaktif
+onMounted(() => {
+  financeStore.fetchAllData();
+});
+
 const aiAnalysisResult = computed(() => {
-  if (!showAiModal.value || !selectedGoal.value) {
-    return null;
+  if (!showAiModal.value || !selectedGoal.value) return null;
+  if (financeStore.loading || financeStore.transactions.length === 0) {
+    return {
+      status: "LOADING",
+      statusInfo: { label: "Menganalisis...", icon: "loader", type: "loading" },
+      suggestion: 0,
+      message: "Sedang menganalisis riwayat transaksi Anda...",
+    };
   }
   return getGoalSuggestion(
     {
       targetAmount: selectedGoal.value.target_amount,
       currentAmount: selectedGoal.value.current_amount,
       targetDate: selectedGoal.value.target_date,
+      allTransactions: financeStore.transactions,
+      netWorth: financeStore.netWorth,
       monthlyIncome: financeStore.currentMonthCashFlow.income,
       monthlyExpense: financeStore.currentMonthCashFlow.expense,
     },
@@ -46,9 +54,7 @@ const aiAnalysisResult = computed(() => {
   );
 });
 
-// --- FUNGSI-FUNGSI UTAMA ---
-
-// Membersihkan form Tambah/Edit Target
+// Fungsi-fungsi untuk interaksi (CRUD Goals, Modals, dll.)
 const resetForm = () => {
   editingGoalId.value = null;
   formGoal.value = { ...initialFormState };
@@ -57,26 +63,26 @@ const resetForm = () => {
   showForm.value = false;
 };
 
-// Menampilkan form untuk target baru
 const handleAddNew = () => {
   resetForm();
   showForm.value = true;
 };
 
-// Menampilkan form dan mengisinya dengan data untuk diedit
 const startEdit = (goal) => {
-  formGoal.value = { ...goal };
+  formGoal.value = {
+    ...goal,
+    target_date: goal.target_date ? goal.target_date.split("T")[0] : null,
+  };
   formattedTargetAmount.value = new Intl.NumberFormat("id-ID").format(
-    goal.target_amount
+    goal.target_amount || 0
   );
   formattedCurrentAmount.value = new Intl.NumberFormat("id-ID").format(
-    goal.current_amount
+    goal.current_amount || 0
   );
   editingGoalId.value = goal.id;
   showForm.value = true;
 };
 
-// Membuka modal "Tambah Dana"
 const openAddFundsModal = (goal) => {
   selectedGoal.value = goal;
   amountToAdd.value = null;
@@ -84,9 +90,11 @@ const openAddFundsModal = (goal) => {
   showAddFundsModal.value = true;
 };
 
-// Menangani submit penambahan dana dari modal
 const handleAddFunds = async () => {
-  if (!selectedGoal.value || !amountToAdd.value) return;
+  if (!selectedGoal.value || !amountToAdd.value || amountToAdd.value <= 0) {
+    alert("Jumlah dana yang ditambahkan harus lebih dari nol.");
+    return;
+  }
   try {
     await financeStore.addFundsToGoal(selectedGoal.value.id, amountToAdd.value);
     showAddFundsModal.value = false;
@@ -95,7 +103,6 @@ const handleAddFunds = async () => {
   }
 };
 
-// Menangani submit form Tambah/Edit Target
 const handleSubmit = async () => {
   try {
     if (editingGoalId.value) {
@@ -109,9 +116,12 @@ const handleSubmit = async () => {
   }
 };
 
-// Menangani penghapusan target
 const handleDelete = async (id) => {
-  if (confirm("Yakin ingin menghapus target ini?")) {
+  if (
+    confirm(
+      "Yakin ingin menghapus target ini? Semua transaksi terkait target ini juga akan terhapus."
+    )
+  ) {
     try {
       await financeStore.deleteGoal(id);
     } catch (e) {
@@ -120,75 +130,73 @@ const handleDelete = async (id) => {
   }
 };
 
-// Fungsi untuk membuka modal AI
 const openAiAssistant = (goal) => {
+  financeStore.fetchAllTransactions();
   selectedGoal.value = goal;
-  aiSuggestionFrequency.value = "weekly"; // Reset ke default saat membuka
+  aiSuggestionFrequency.value = "weekly";
+  isExplanationVisible.value = false;
   showAiModal.value = true;
 };
 
-// Fungsi untuk menerapkan saran AI
 const applyAiSuggestion = () => {
   if (aiAnalysisResult.value && aiAnalysisResult.value.suggestion > 0) {
     openAddFundsModal(selectedGoal.value);
+    const numericValue = aiAnalysisResult.value.suggestion;
+    amountToAdd.value = numericValue;
     formattedAmountToAdd.value = new Intl.NumberFormat("id-ID").format(
-      aiAnalysisResult.value.suggestion
+      numericValue
     );
     showAiModal.value = false;
   }
 };
 
-// --- WATCHERS UNTUK FORMAT ANGKA REAL-TIME ---
+// Watchers untuk format angka
 watch(formattedTargetAmount, (newValue) => {
-  if (!newValue) {
-    formGoal.value.target_amount = null;
-    return;
-  }
-  const numericValue = parseInt(newValue.replace(/\D/g, ""), 10);
-  if (!isNaN(numericValue)) {
+  const numericValue = parseInt(newValue.replace(/\D/g, ""), 10) || null;
+  if (formGoal.value.target_amount !== numericValue) {
     formGoal.value.target_amount = numericValue;
-    const formatted = new Intl.NumberFormat("id-ID").format(numericValue);
-    if (formattedTargetAmount.value !== formatted)
+  }
+  const formatted = numericValue
+    ? new Intl.NumberFormat("id-ID").format(numericValue)
+    : "";
+  if (formatted !== newValue) {
+    nextTick(() => {
       formattedTargetAmount.value = formatted;
-  } else {
-    formGoal.value.target_amount = null;
+    });
   }
 });
 
 watch(formattedCurrentAmount, (newValue) => {
-  if (!newValue) {
-    formGoal.value.current_amount = 0;
-    return;
-  }
-  const numericValue = parseInt(newValue.replace(/\D/g, ""), 10);
-  if (!isNaN(numericValue)) {
+  const numericValue = parseInt(newValue.replace(/\D/g, ""), 10) || 0;
+  if (formGoal.value.current_amount !== numericValue) {
     formGoal.value.current_amount = numericValue;
-    const formatted = new Intl.NumberFormat("id-ID").format(numericValue);
-    if (formattedCurrentAmount.value !== formatted)
+  }
+  const formatted = numericValue
+    ? new Intl.NumberFormat("id-ID").format(numericValue)
+    : "";
+  if (formatted !== newValue) {
+    nextTick(() => {
       formattedCurrentAmount.value = formatted;
-  } else {
-    formGoal.value.current_amount = 0;
+    });
   }
 });
 
 watch(formattedAmountToAdd, (newValue) => {
-  if (!newValue) {
-    amountToAdd.value = null;
-    return;
-  }
-  const numericValue = parseInt(newValue.replace(/\D/g, ""), 10);
-  if (!isNaN(numericValue)) {
+  const numericValue = parseInt(newValue.replace(/\D/g, ""), 10) || null;
+  if (amountToAdd.value !== numericValue) {
     amountToAdd.value = numericValue;
-    const formatted = new Intl.NumberFormat("id-ID").format(numericValue);
-    if (formattedAmountToAdd.value !== formatted) {
+  }
+  const formatted = numericValue
+    ? new Intl.NumberFormat("id-ID").format(numericValue)
+    : "";
+  if (formatted !== newValue) {
+    nextTick(() => {
       formattedAmountToAdd.value = formatted;
-    }
-  } else {
-    amountToAdd.value = null;
+    });
   }
 });
 
-// --- FUNGSI BANTU & LIFECYCLE HOOK ---
+// Fungsi utilitas
 const formatCurrency = (value) =>
   new Intl.NumberFormat("id-ID", {
     style: "currency",
@@ -198,14 +206,24 @@ const formatCurrency = (value) =>
 
 const calculateDaysRemaining = (targetDate) => {
   if (!targetDate) return null;
-  const diff = new Date(targetDate) - new Date();
-  if (diff <= 0) return "Terlewat";
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+  const endDate = new Date(targetDate);
+  const diff = endDate - now;
+  if (diff < 0) return "Terlewat";
   const days = Math.ceil(diff / (1000 * 60 * 60 * 24));
   return `${days} hari lagi`;
 };
 
+// Watcher untuk re-render ikon Feather
 watch(
-  () => [financeStore.goals, showAiModal.value, showForm.value],
+  () => [
+    financeStore.goals,
+    showAiModal.value,
+    showForm.value,
+    isExplanationVisible.value,
+    aiSuggestionFrequency.value,
+  ],
   () => {
     nextTick(() => {
       feather.replace();
@@ -241,14 +259,13 @@ watch(
               class="form-input"
             />
           </div>
-          <div v-if="editingGoalId" class="form-group">
-            <label>Dana Saat Ini (Rp)</label>
+          <div v-if="!editingGoalId" class="form-group">
+            <label>Dana Awal (Opsional)</label>
             <input
               v-model="formattedCurrentAmount"
               type="text"
               inputmode="numeric"
               placeholder="0"
-              required
               class="form-input text-right"
             />
           </div>
@@ -288,8 +305,16 @@ watch(
     </div>
 
     <div class="goals-grid">
-      <div v-if="financeStore.loading" class="loading-indicator">Memuat...</div>
-      <div v-else-if="financeStore.goals.length === 0" class="card no-goals">
+      <div
+        v-if="financeStore.loading && financeStore.goals.length === 0"
+        class="loading-indicator"
+      >
+        Memuat Target...
+      </div>
+      <div
+        v-else-if="!financeStore.loading && financeStore.goals.length === 0"
+        class="card no-goals"
+      >
         Belum ada target yang dibuat. Klik 'Tambah Target' untuk memulai.
       </div>
       <div
@@ -327,6 +352,7 @@ watch(
               Target:
               {{
                 new Date(goal.target_date).toLocaleDateString("id-ID", {
+                  timeZone: "UTC",
                   day: "numeric",
                   month: "long",
                   year: "numeric",
@@ -443,10 +469,70 @@ watch(
             Bulanan
           </button>
         </div>
+
         <div v-if="aiAnalysisResult" class="ai-suggestion">
-          <p v-html="aiAnalysisResult.message"></p>
+          <div
+            v-if="aiAnalysisResult.statusInfo"
+            :class="[
+              'ai-status-banner',
+              `ai-status-banner--${aiAnalysisResult.statusInfo.type}`,
+            ]"
+          >
+            <i
+              :data-feather="aiAnalysisResult.statusInfo.icon"
+              class="icon-sm"
+            ></i>
+            <span>{{ aiAnalysisResult.statusInfo.label }}</span>
+          </div>
+
+          <p class="ai-message" v-html="aiAnalysisResult.message"></p>
+
+          <div v-if="aiAnalysisResult.analysis" class="explanation-container">
+            <button
+              class="explanation-toggle"
+              @click="isExplanationVisible = !isExplanationVisible"
+            >
+              <span v-if="!isExplanationVisible">Lihat Detail Analisis</span>
+              <span v-else>Tutup Detail Analisis</span>
+              <i
+                :data-feather="
+                  isExplanationVisible ? 'chevron-up' : 'chevron-down'
+                "
+              ></i>
+            </button>
+            <div v-if="isExplanationVisible" class="explanation-details">
+              <ul>
+                <li>
+                  Kebutuhan menabung (per
+                  {{ aiAnalysisResult.analysis.timeUnit }}):
+                  <strong>{{
+                    formatCurrency(aiAnalysisResult.analysis.requiredSavings)
+                  }}</strong>
+                </li>
+                <li>
+                  Kapasitas menabung Anda (per
+                  {{ aiAnalysisResult.analysis.timeUnit }}):
+                  <strong>{{
+                    formatCurrency(
+                      aiAnalysisResult.analysis.disposableIncomeForPeriod
+                    )
+                  }}</strong>
+                </li>
+                <li>
+                  Rata-rata sisa dana bulanan:
+                  <strong>{{
+                    formatCurrency(
+                      aiAnalysisResult.analysis.avgMonthlyDisposableIncome
+                    )
+                  }}</strong>
+                </li>
+              </ul>
+            </div>
+          </div>
         </div>
+
         <div v-else class="loading-indicator"><p>Menganalisis...</p></div>
+
         <div class="form-actions">
           <button
             type="button"
@@ -560,7 +646,7 @@ watch(
   border-radius: 50%;
 }
 .action-btn:hover {
-  background-color: #f3f4f6;
+  background-color: var(--background-color-light);
 }
 .edit-btn:hover {
   color: var(--primary-color);
@@ -661,14 +747,11 @@ watch(
 .modal-content {
   width: 100%;
   max-width: 400px;
+  padding: 24px;
 }
 .modal-subtitle {
   margin-bottom: 24px;
   color: var(--text-secondary);
-}
-.ai-suggestion p {
-  line-height: 1.7;
-  color: var(--text-primary);
 }
 .ai-suggestion strong {
   color: var(--primary-color);
@@ -687,7 +770,7 @@ watch(
 .frequency-switcher {
   display: flex;
   justify-content: center;
-  background-color: #f3f4f6;
+  background-color: var(--background-color-light);
   border-radius: 8px;
   padding: 4px;
   margin-bottom: 24px;
@@ -707,5 +790,128 @@ watch(
   background-color: var(--surface-color);
   color: var(--primary-color);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+.explanation-container {
+  margin-top: 20px;
+}
+.explanation-toggle {
+  width: 100%;
+  background-color: var(--background-color-light);
+  border: 1px solid var(--border-color);
+  padding: 10px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 500;
+  color: var(--text-secondary);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  transition: background-color 0.2s ease;
+}
+.explanation-toggle:hover {
+  background-color: #e2e8f0;
+}
+.dark-theme .explanation-toggle:hover {
+  background-color: #334155;
+}
+.explanation-details {
+  margin-top: 12px;
+  padding: 16px;
+  background-color: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  animation: fadeIn 0.3s ease;
+}
+.dark-theme .explanation-details {
+  background-color: #1e293b;
+  border-color: #334155;
+}
+.explanation-details ul {
+  padding-left: 20px;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.explanation-details li {
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+.explanation-details strong {
+  color: var(--text-primary);
+}
+
+/* ============== STYLE BARU UNTUK MODAL AI ============== */
+.ai-status-banner {
+  width: 100%;
+  padding: 12px 16px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-weight: 600;
+  margin-bottom: 16px;
+  border: 1px solid transparent;
+}
+.ai-status-banner .icon-sm {
+  margin-right: 0;
+}
+.ai-status-banner--realistic {
+  background-color: #f0fdf4;
+  color: #166534;
+  border-color: #bbf7d0;
+}
+.dark-theme .ai-status-banner--realistic {
+  background-color: #142b21;
+  color: #6ee7b7;
+  border-color: #2b5f45;
+}
+.ai-status-banner--adjustment {
+  background-color: #fefce8;
+  color: #854d0e;
+  border-color: #fef08a;
+}
+.dark-theme .ai-status-banner--adjustment {
+  background-color: #2e2912;
+  color: #fde047;
+  border-color: #635319;
+}
+.ai-status-banner--negative {
+  background-color: #fef2f2;
+  color: #991b1b;
+  border-color: #fecaca;
+}
+.dark-theme .ai-status-banner--negative {
+  background-color: #2f1616;
+  color: #fca5a5;
+  border-color: #632424;
+}
+.ai-status-banner--loading .icon-sm {
+  animation: spin 1.5s linear infinite;
+}
+.ai-message {
+  line-height: 1.7;
+  color: var(--text-primary);
+  margin-top: 0;
+}
+:deep(.explanation-box) {
+  background-color: var(--background-color-light);
+  border: 1px solid var(--border-color);
+  padding: 12px;
+  margin: 8px 0;
+  border-radius: 6px;
+  font-size: 14px;
+  line-height: 1.6;
+}
+:deep(.explanation-box strong) {
+  color: var(--primary-color);
+}
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 </style>
